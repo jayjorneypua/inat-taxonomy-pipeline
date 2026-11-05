@@ -1,0 +1,14 @@
+resources:
+  jobs:
+    inat_taxonomy_pipeline:
+      name: inat_taxonomy_pipeline
+      max_concurrent_runs: 1
+
+      permissions:
+        - level: CAN_MANAGE
+          user_name: jayjorneypua@gmail.com
+
+      tasks:
+        - task_key: download_taxa
+          notebook_task:
+            notebook_path: ../notebooks/01_download_taxa.py
