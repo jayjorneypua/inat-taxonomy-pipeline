@@ -18,3 +18,9 @@ resources:
             - task_key: download_taxa
           notebook_task:
             notebook_path: ../notebooks/02_bronze_taxa.py
+
+        - task_key: silver_taxa
+          depends_on:
+            - task_key: bronze_taxa
+          notebook_task:
+            notebook_path: ../notebooks/03_silver_taxa.sql
