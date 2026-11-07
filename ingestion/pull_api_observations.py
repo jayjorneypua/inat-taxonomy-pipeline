@@ -32,6 +32,7 @@ FIELDS = ",".join([
     "taxon.preferred_common_name",
     "user.id",
     "user.login",
+    "user.name",
     "photos.id",
     "photos.license_code",
     "photos.url",
@@ -39,12 +40,17 @@ FIELDS = ",".join([
 ])
 
 PAGE_SIZE = 200
-SECONDS_BETWEEN_REQUESTS = 1.0  # stay at or under 60 requests per minute
+MIN_SECONDS_BETWEEN_REQUESTS = 1.0  # never more than 60 requests per minute
 MAX_REQUESTS_PER_RUN = 5000  # half of inat's 10,000 requests per day guideline
 MAX_ATTEMPTS = 5
+MAX_RECENT_EVENTS = 50
 WATERMARK_OVERLAP = timedelta(hours=1)
 TIMESTAMP_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 USER_AGENT = "inat-taxonomy-pipeline (github.com/jayjorneypua/inat-taxonomy-pipeline)"
+
+
+def utc_now_text():
+    return datetime.now(timezone.utc).strftime(TIMESTAMP_FORMAT)
 
 
 def read_state(state_path, initial_watermark):
@@ -61,6 +67,17 @@ def write_state(state_path, state):
     temp_path.replace(state_path)
 
 
+def log_event(state, state_path, message):
+    # keep the latest events in the state file so the watcher can show them live
+    print(message)
+    event_sequence = state.get("last_event_sequence", 0) + 1
+    state["last_event_sequence"] = event_sequence
+    recent_events = state.setdefault("recent_events", [])
+    recent_events.append({"sequence": event_sequence, "logged_at": utc_now_text(), "message": message})
+    del recent_events[:-MAX_RECENT_EVENTS]
+    write_state(state_path, state)
+
+
 def seconds_to_wait(response, attempt):
     # inat may tell us how long to wait, otherwise back off 2, 4, 8, 16 seconds
     retry_after = response.headers.get("Retry-After") if response is not None else None
@@ -70,19 +87,19 @@ def seconds_to_wait(response, attempt):
         return 2 ** attempt
 
 
-def get_page(session, parameters):
+def get_page(session, parameters, log):
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             response = session.get(API_URL, params=parameters, timeout=60)
         except (requests.ConnectionError, requests.Timeout) as error:
             wait_seconds = seconds_to_wait(None, attempt)
-            print(f"attempt {attempt} failed ({error}), retrying in {wait_seconds}s")
+            log(f"attempt {attempt} failed ({type(error).__name__}), retrying in {wait_seconds}s")
             time.sleep(wait_seconds)
             continue
 
         if response.status_code == 429 or response.status_code >= 500:
             wait_seconds = seconds_to_wait(response, attempt)
-            print(f"attempt {attempt} got {response.status_code}, retrying in {wait_seconds}s")
+            log(f"attempt {attempt} got {response.status_code}, retrying in {wait_seconds}s")
             time.sleep(wait_seconds)
             continue
 
@@ -124,16 +141,19 @@ def pull_observations(
     state_path = Path(state_path)
     state = read_state(state_path, initial_watermark)
 
+    def log(message):
+        log_event(state, state_path, message)
+
     if state["current_run"] is None:
         state["current_run"] = {
-            "run_started_at": datetime.now(timezone.utc).strftime(TIMESTAMP_FORMAT),
+            "run_started_at": utc_now_text(),
             "updated_since": state["watermark"],
             "last_id": 0,
             "pages_written": 0,
         }
-        write_state(state_path, state)
+        log(f"run started, pulling changes since {state['watermark']}")
     else:
-        print(f"resuming unfinished run from id {state['current_run']['last_id']}")
+        log(f"resuming unfinished run from id {state['current_run']['last_id']}")
 
     current_run = state["current_run"]
     run_id = current_run["run_started_at"].replace("-", "").replace(":", "")
@@ -145,48 +165,60 @@ def pull_observations(
     requests_made = 0
     observations_written = 0
     finished = False
+    last_request_started_at = None
 
-    while requests_made < max_requests:
-        parameters = {
-            **SCOPE_PARAMETERS,
-            "updated_since": current_run["updated_since"],
-            "order_by": "id",
-            "order": "asc",
-            "id_above": current_run["last_id"],
-            "per_page": PAGE_SIZE,
-            "fields": FIELDS,
-        }
-        page = get_page(session, parameters)
-        requests_made += 1
-        observations = page["results"]
+    try:
+        while requests_made < max_requests:
+            # wait only for what is left of the minimum gap since the last request started
+            if last_request_started_at is not None:
+                seconds_since_last_request = time.monotonic() - last_request_started_at
+                if seconds_since_last_request < MIN_SECONDS_BETWEEN_REQUESTS:
+                    time.sleep(MIN_SECONDS_BETWEEN_REQUESTS - seconds_since_last_request)
+            last_request_started_at = time.monotonic()
 
-        if not observations:
-            finished = True
-            break
+            parameters = {
+                **SCOPE_PARAMETERS,
+                "updated_since": current_run["updated_since"],
+                "order_by": "id",
+                "order": "asc",
+                "id_above": current_run["last_id"],
+                "per_page": PAGE_SIZE,
+                "fields": FIELDS,
+            }
+            page = get_page(session, parameters, log)
+            requests_made += 1
+            observations = page["results"]
 
-        check_updated_since(observations, current_run["updated_since"])
+            if not observations:
+                finished = True
+                break
 
-        page_number = current_run["pages_written"] + 1
-        write_page(run_folder / f"page_{page_number:05d}.json", observations)
-        observations_written += len(observations)
+            check_updated_since(observations, current_run["updated_since"])
 
-        # checkpoint after every page, so a crash loses at most one page
-        current_run["last_id"] = observations[-1]["id"]
-        current_run["pages_written"] = page_number
-        write_state(state_path, state)
+            page_number = current_run["pages_written"] + 1
+            write_page(run_folder / f"page_{page_number:05d}.json", observations)
+            observations_written += len(observations)
 
-        if len(observations) < PAGE_SIZE:
-            finished = True
-            break
+            # checkpoint after every page (log writes the state), so a crash loses at most one page
+            current_run["last_id"] = observations[-1]["id"]
+            current_run["pages_written"] = page_number
+            log(f"page {page_number}: {len(observations)} observations, last id {current_run['last_id']:,}")
 
-        time.sleep(SECONDS_BETWEEN_REQUESTS)
+            if len(observations) < PAGE_SIZE:
+                finished = True
+                break
+    except Exception as error:
+        log(f"run failed: {type(error).__name__}: {error}")
+        raise
 
     if finished:
         # overlap a little so nothing slips past while inat's search index catches up
         run_started_at = datetime.strptime(current_run["run_started_at"], TIMESTAMP_FORMAT)
         state["watermark"] = (run_started_at - WATERMARK_OVERLAP).strftime(TIMESTAMP_FORMAT)
         state["current_run"] = None
-        write_state(state_path, state)
+        log(f"run finished: {observations_written:,} observations, new watermark {state['watermark']}")
+    else:
+        log(f"stopped at the {max_requests:,} request cap, next run resumes from id {current_run['last_id']:,}")
 
     summary = {
         "run_id": run_id,
@@ -195,10 +227,9 @@ def pull_observations(
         "observations_written": observations_written,
         "watermark": state["watermark"],
     }
-    print(summary)
     return summary
 
 
 if __name__ == "__main__":
     # local test: only 3 requests, so it stops early and the next run has to resume
-    pull_observations(max_requests=3)
+    print(pull_observations(max_requests=3))
