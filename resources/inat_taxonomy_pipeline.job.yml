@@ -46,3 +46,13 @@ resources:
             - task_key: download_photos
           notebook_task:
             notebook_path: ../notebooks/07_bronze_photos.py
+
+        - task_key: pull_api_observations
+          notebook_task:
+            notebook_path: ../notebooks/08_pull_api_observations.py
+
+        - task_key: bronze_api_observations
+          depends_on:
+            - task_key: pull_api_observations
+          notebook_task:
+            notebook_path: ../notebooks/09_bronze_api_observations.py
