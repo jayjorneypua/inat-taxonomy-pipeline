@@ -64,3 +64,13 @@ resources:
             - task_key: bronze_api_observations
           notebook_task:
             notebook_path: ../notebooks/10_silver_observations.sql
+
+        - task_key: download_observers
+          notebook_task:
+            notebook_path: ../notebooks/11_download_observers.py
+
+        - task_key: bronze_observers
+          depends_on:
+            - task_key: download_observers
+          notebook_task:
+            notebook_path: ../notebooks/12_bronze_observers.py
