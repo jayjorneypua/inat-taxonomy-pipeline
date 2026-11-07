@@ -34,3 +34,15 @@ resources:
             - task_key: download_observations
           notebook_task:
             notebook_path: ../notebooks/05_bronze_observations.py
+
+        - task_key: download_photos
+          depends_on:
+            - task_key: download_observations
+          notebook_task:
+            notebook_path: ../notebooks/06_download_photos.py
+
+        - task_key: bronze_photos
+          depends_on:
+            - task_key: download_photos
+          notebook_task:
+            notebook_path: ../notebooks/07_bronze_photos.py
