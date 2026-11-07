@@ -1,0 +1,17 @@
+name: inat_taxonomy
+
+profile: inat_taxonomy
+
+model-paths: ["models"]
+snapshot-paths: ["snapshots"]
+macro-paths: ["macros"]
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  inat_taxonomy:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

@@ -1,0 +1,99 @@
+version: 2
+
+models:
+  - name: dim_taxon
+    columns:
+      - name: taxon_id
+        data_tests:
+          - unique
+          - not_null
+      - name: parent_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_taxon')
+                field: taxon_id
+
+  - name: dim_observer
+    columns:
+      - name: observer_id
+        data_tests:
+          - unique
+          - not_null
+      - name: display_name
+        data_tests:
+          - not_null
+
+  - name: dim_date
+    columns:
+      - name: date_key
+        data_tests:
+          - unique
+          - not_null
+
+  - name: dim_photo
+    columns:
+      - name: photo_id
+        data_tests:
+          - unique
+          - not_null
+      - name: attribution
+        data_tests:
+          - not_null
+
+  - name: bridge_observation_photo
+    data_tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - observation_uuid
+              - photo_id
+    columns:
+      - name: observation_uuid
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('fct_observations')
+                field: observation_uuid
+      - name: photo_id
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_photo')
+                field: photo_id
+
+  - name: fct_observations
+    columns:
+      - name: observation_uuid
+        data_tests:
+          - unique
+          - not_null
+      - name: taxon_id
+        data_tests:
+          - not_null
+          # taxa created after the taxa snapshot only appear with the next monthly dump
+          - relationships:
+              arguments:
+                to: ref('dim_taxon')
+                field: taxon_id
+              config:
+                severity: warn
+      - name: observer_id
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_observer')
+                field: observer_id
+      - name: observed_date_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_key
+      - name: photo_count
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1
