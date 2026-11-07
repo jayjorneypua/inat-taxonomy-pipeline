@@ -1,10 +1,12 @@
 # Databricks notebook source
+import json
 import sys
 
 sys.path.append("../ingestion")
 
-from download_taxa import download_taxa
+from download_dump_file import download_dump_file
 
 # COMMAND ----------
 
-download_taxa(out_dir="/Volumes/inat/raw/files/taxa")
+summary = download_dump_file("taxa.csv.gz", out_dir="/Volumes/inat/raw/files/taxa")
+dbutils.notebook.exit(json.dumps(summary))
