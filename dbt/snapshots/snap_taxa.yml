@@ -1,0 +1,12 @@
+snapshots:
+  - name: snap_taxa
+    relation: ref('stg_taxa')
+    config:
+      unique_key: taxon_id
+      strategy: check
+      check_cols:
+        - scientific_name
+        - rank
+        - parent_id
+        - path
+        - is_active

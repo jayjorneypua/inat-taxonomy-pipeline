@@ -8,6 +8,13 @@ resources:
         - level: CAN_MANAGE
           user_name: jayjorneypua@gmail.com
 
+      environments:
+        - environment_key: dbt-default
+          spec:
+            environment_version: "6"
+            dependencies:
+              - dbt-databricks==1.13.0
+
       tasks:
         - task_key: download_taxa
           notebook_task:
@@ -74,3 +81,18 @@ resources:
             - task_key: download_observers
           notebook_task:
             notebook_path: ../notebooks/12_bronze_observers.py
+
+        - task_key: dbt_build
+          depends_on:
+            - task_key: silver_taxa
+            - task_key: silver_observations
+            - task_key: bronze_observers
+          environment_key: dbt-default
+          dbt_task:
+            project_directory: ../dbt
+            commands:
+              - dbt deps
+              - dbt build
+            warehouse_id: 606b0c60dc21c8fd
+            catalog: inat
+            schema: gold

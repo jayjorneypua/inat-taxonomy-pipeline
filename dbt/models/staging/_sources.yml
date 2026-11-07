@@ -1,0 +1,17 @@
+version: 2
+
+sources:
+  - name: silver
+    database: inat
+    schema: silver
+    tables:
+      - name: taxa
+      - name: observations
+      - name: observation_photos
+
+  - name: bronze
+    database: inat
+    schema: bronze
+    tables:
+      - name: observers
+      - name: api_observations
