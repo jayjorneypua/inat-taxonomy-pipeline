@@ -24,3 +24,7 @@ resources:
             - task_key: bronze_taxa
           notebook_task:
             notebook_path: ../notebooks/03_silver_taxa.sql
+
+        - task_key: download_observations
+          notebook_task:
+            notebook_path: ../notebooks/04_download_observations.py
