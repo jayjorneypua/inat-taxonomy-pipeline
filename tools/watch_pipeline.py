@@ -25,6 +25,10 @@ POLL_SECONDS = 10
 POLLS_BETWEEN_PROGRESS_LINES = 3
 FINISHED_RUN_STATES = {"TERMINATED", "SKIPPED", "INTERNAL_ERROR"}
 FAILED_TASK_STATES = {"FAILED", "TIMEDOUT", "INTERNAL_ERROR"}
+FRIENDLY_STATUS_NAMES = {
+    "QUEUED": "queued, waiting for compute",
+    "PENDING": "starting",
+}
 
 
 def clock():
@@ -57,6 +61,19 @@ def task_status(task):
     if life_cycle_state == "TERMINATED" and task.state.result_state is not None:
         return task.state.result_state.value
     return life_cycle_state
+
+
+def display_status(task, statuses_by_task):
+    status = statuses_by_task[task.task_key]
+    if status == "BLOCKED":
+        # list only the upstream tasks that have not finished yet
+        unfinished_dependencies = [
+            dependency.task_key
+            for dependency in task.depends_on or []
+            if statuses_by_task.get(dependency.task_key) != "SUCCESS"
+        ]
+        return "waiting for " + ", ".join(unfinished_dependencies) if unfinished_dependencies else "waiting"
+    return FRIENDLY_STATUS_NAMES.get(status, status)
 
 
 def first_error_line(workspace_client, task):
@@ -103,31 +120,33 @@ def watch():
     print(f"{clock()}  watching run {run_id}, checking every {POLL_SECONDS}s, ctrl+c to stop")
 
     last_seen_sequence = read_state(workspace_client).get("last_event_sequence", 0)
-    task_statuses = {}
+    displayed_statuses = {}
     poll_count = 0
     previous_pages_written = None
     previous_check_time = None
 
     while True:
         run = workspace_client.jobs.get_run(run_id)
+        tasks = run.tasks or []
 
-        # print every task whose status changed since the last check
-        for task in run.tasks or []:
-            status = task_status(task)
-            if task_statuses.get(task.task_key) != status:
-                task_statuses[task.task_key] = status
-                status_line = f"{clock()}  {task.task_key}: {status}"
-                if status in FAILED_TASK_STATES:
-                    status_line += f"  {first_error_line(workspace_client, task)}"
-                print(status_line)
-
-        # api pull events (pages, retries, failures) from the loader's state file
+        # api pull events first (pages, retries, failures), they carry their own timestamps
         state = read_state(workspace_client)
         last_seen_sequence = print_new_events(state, last_seen_sequence)
 
+        # then every task whose status changed since the last check
+        statuses_by_task = {task.task_key: task_status(task) for task in tasks}
+        for task in tasks:
+            status_text = display_status(task, statuses_by_task)
+            if displayed_statuses.get(task.task_key) != status_text:
+                displayed_statuses[task.task_key] = status_text
+                status_line = f"{clock()}  {task.task_key}: {status_text}"
+                if statuses_by_task[task.task_key] in FAILED_TASK_STATES:
+                    status_line += f"  {first_error_line(workspace_client, task)}"
+                print(status_line)
+
         # api pull progress, every few checks while it runs
         current_run = state["current_run"]
-        if task_statuses.get(API_TASK_KEY) == "RUNNING" and current_run is not None:
+        if statuses_by_task.get(API_TASK_KEY) == "RUNNING" and current_run is not None:
             if poll_count % POLLS_BETWEEN_PROGRESS_LINES == 0:
                 check_time = time.time()
                 pages_written = current_run["pages_written"]
