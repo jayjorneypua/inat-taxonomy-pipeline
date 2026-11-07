@@ -56,3 +56,11 @@ resources:
             - task_key: pull_api_observations
           notebook_task:
             notebook_path: ../notebooks/09_bronze_api_observations.py
+
+        - task_key: silver_observations
+          depends_on:
+            - task_key: bronze_observations
+            - task_key: bronze_photos
+            - task_key: bronze_api_observations
+          notebook_task:
+            notebook_path: ../notebooks/10_silver_observations.sql
