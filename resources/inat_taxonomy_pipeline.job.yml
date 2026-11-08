@@ -26,12 +26,6 @@ resources:
           notebook_task:
             notebook_path: ../notebooks/02_bronze_taxa.py
 
-        - task_key: silver_taxa
-          depends_on:
-            - task_key: bronze_taxa
-          notebook_task:
-            notebook_path: ../notebooks/03_silver_taxa.sql
-
         - task_key: download_observations
           notebook_task:
             notebook_path: ../notebooks/04_download_observations.py
@@ -82,11 +76,42 @@ resources:
           notebook_task:
             notebook_path: ../notebooks/12_bronze_observers.py
 
+        - task_key: download_vernacular_names
+          notebook_task:
+            notebook_path: ../notebooks/13_download_vernacular_names.py
+
+        - task_key: bronze_vernacular_names
+          depends_on:
+            - task_key: download_vernacular_names
+          notebook_task:
+            notebook_path: ../notebooks/14_bronze_vernacular_names.py
+
+        - task_key: pull_missing_taxa
+          depends_on:
+            - task_key: bronze_taxa
+            - task_key: silver_observations
+          notebook_task:
+            notebook_path: ../notebooks/15_pull_missing_taxa.py
+
+        - task_key: bronze_api_taxa
+          depends_on:
+            - task_key: pull_missing_taxa
+          notebook_task:
+            notebook_path: ../notebooks/16_bronze_api_taxa.py
+
+        - task_key: silver_taxa
+          depends_on:
+            - task_key: bronze_taxa
+            - task_key: bronze_api_taxa
+          notebook_task:
+            notebook_path: ../notebooks/03_silver_taxa.sql
+
         - task_key: dbt_build
           depends_on:
             - task_key: silver_taxa
             - task_key: silver_observations
             - task_key: bronze_observers
+            - task_key: bronze_vernacular_names
           environment_key: dbt-default
           dbt_task:
             project_directory: ../dbt

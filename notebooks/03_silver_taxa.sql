@@ -6,7 +6,7 @@ WITH latest_snapshot AS (
     FROM
         inat.bronze.taxa
 )
-, latest_taxa AS (
+, dump_taxa AS (
     SELECT
         bronze_taxa.taxon_id
       , bronze_taxa.name
@@ -20,6 +20,48 @@ WITH latest_snapshot AS (
     INNER JOIN
         latest_snapshot
         ON bronze_taxa.snapshot_date = latest_snapshot.snapshot_date
+)
+, api_taxa_versions AS (
+    SELECT
+        CAST(api_rows.id AS INT)                                   AS taxon_id
+      , api_rows.name
+      , api_rows.rank
+      , api_rows.rank_level
+      , api_rows.is_active                                         AS active
+      , api_rows.ancestry
+      , CAST(api_rows._ingested_at AS DATE)                        AS snapshot_date
+      , ROW_NUMBER() OVER (
+            PARTITION BY
+                api_rows.id
+            ORDER BY
+                api_rows._ingested_at DESC
+        )                                                          AS version_rank
+    FROM
+        inat.bronze.api_taxa api_rows
+)
+-- taxa created after the dump snapshot come from the api until the next dump has them
+, latest_taxa AS (
+    SELECT * FROM dump_taxa
+
+    UNION ALL
+
+    SELECT
+        api_taxa_versions.taxon_id
+      , api_taxa_versions.name
+      , api_taxa_versions.rank
+      , api_taxa_versions.rank_level
+      , api_taxa_versions.active
+      , api_taxa_versions.ancestry
+      , api_taxa_versions.snapshot_date
+    FROM
+        api_taxa_versions
+    WHERE
+        api_taxa_versions.version_rank = 1
+    AND NOT EXISTS (
+            SELECT 1
+            FROM dump_taxa
+            WHERE dump_taxa.taxon_id = api_taxa_versions.taxon_id
+        )
 )
 , taxa_with_path AS (
     SELECT

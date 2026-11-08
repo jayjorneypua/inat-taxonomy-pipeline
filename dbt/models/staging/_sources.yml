@@ -15,3 +15,5 @@ sources:
     tables:
       - name: observers
       - name: api_observations
+      - name: api_taxa
+      - name: vernacular_names
