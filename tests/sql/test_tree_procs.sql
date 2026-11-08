@@ -2,6 +2,7 @@
 -- so no test data stays in the database
 USE inat;
 SET NOCOUNT ON;
+SET QUOTED_IDENTIFIER ON;
 
 BEGIN TRANSACTION;
 
