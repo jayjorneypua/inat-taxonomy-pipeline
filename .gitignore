@@ -226,3 +226,6 @@ dbt_packages/
 logs/
 
 .databricks/
+
+bin/
+obj/
