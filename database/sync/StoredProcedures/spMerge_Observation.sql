@@ -44,15 +44,27 @@ AS BEGIN
     WHERE
         EXISTS (
             SELECT
-                target_observations.InatObservationID, target_observations.ID_Taxon, target_observations.ID_Observer
-              , target_observations.ObservedDate, target_observations.Latitude, target_observations.Longitude
-              , target_observations.PositionalAccuracy, target_observations.PhotoCount, target_observations.Source
+                target_observations.InatObservationID
+              , target_observations.ID_Taxon
+              , target_observations.ID_Observer
+              , target_observations.ObservedDate
+              , target_observations.Latitude
+              , target_observations.Longitude
+              , target_observations.PositionalAccuracy
+              , target_observations.PhotoCount
+              , target_observations.Source  COLLATE Latin1_General_100_BIN2
               , target_observations.UpdatedDate
             EXCEPT
             SELECT
-                source_observations.InatObservationID, source_observations.ID_Taxon, source_observations.ID_Observer
-              , source_observations.ObservedDate, source_observations.Latitude, source_observations.Longitude
-              , source_observations.PositionalAccuracy, source_observations.PhotoCount, source_observations.Source
+                source_observations.InatObservationID
+              , source_observations.ID_Taxon
+              , source_observations.ID_Observer
+              , source_observations.ObservedDate
+              , source_observations.Latitude
+              , source_observations.Longitude
+              , source_observations.PositionalAccuracy
+              , source_observations.PhotoCount
+              , source_observations.Source  COLLATE Latin1_General_100_BIN2
               , source_observations.UpdatedDate
         );
 

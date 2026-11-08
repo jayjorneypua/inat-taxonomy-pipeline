@@ -20,6 +20,7 @@ SELECT
   , COALESCE(photo_counts.photo_count, 0)                           AS photo_count
   , observations.source
   , observations.updated_at
+  , observations.changed_at
 FROM
     {{ ref('stg_observations') }} observations
 LEFT JOIN

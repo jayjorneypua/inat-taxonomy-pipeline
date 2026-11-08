@@ -8,5 +8,6 @@ SELECT
   , height
   , attribution
   , source
+  , ingested_at       AS changed_at
 FROM
     {{ source('silver', 'observation_photos') }}

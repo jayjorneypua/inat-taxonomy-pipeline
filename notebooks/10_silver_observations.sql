@@ -19,6 +19,7 @@ WITH latest_dump_snapshot AS (
       , dump_rows.observed_on
       , CAST(NULL AS TIMESTAMP)                                 AS updated_at
       , CAST(dump_rows.snapshot_date AS TIMESTAMP)              AS as_of_at
+      , dump_rows._ingested_at                                  AS ingested_at
       , 'dump'                                                  AS source
       , 1                                                       AS source_priority
     FROM
@@ -40,6 +41,7 @@ WITH latest_dump_snapshot AS (
       , CAST(api_rows.observed_on AS DATE)                      AS observed_on
       , to_timestamp(api_rows.updated_at)                       AS updated_at
       , to_timestamp(api_rows.updated_at)                       AS as_of_at
+      , api_rows._ingested_at                                   AS ingested_at
       , 'api'                                                   AS source
       , 2                                                       AS source_priority
     FROM
@@ -63,6 +65,7 @@ WITH latest_dump_snapshot AS (
             ORDER BY
                 as_of_at DESC
               , source_priority DESC
+              , ingested_at DESC
         )                                                       AS version_rank
     FROM
         all_versions
@@ -79,6 +82,7 @@ SELECT
   , observed_on
   , updated_at
   , as_of_at
+  , ingested_at
   , source
   , current_timestamp()                                         AS _loaded_at
 FROM
@@ -105,6 +109,7 @@ WITH latest_dump_snapshot AS (
       , dump_rows.width
       , dump_rows.height
       , CAST(NULL AS STRING)                                    AS attribution
+      , dump_rows._ingested_at                                  AS ingested_at
       , 'dump'                                                  AS source
     FROM
         inat.bronze.photos dump_rows
@@ -116,6 +121,7 @@ WITH latest_dump_snapshot AS (
     SELECT
         api_rows.uuid
       , api_rows.photos
+      , api_rows._ingested_at
       , ROW_NUMBER() OVER (
             PARTITION BY
                 api_rows.uuid
@@ -136,6 +142,7 @@ WITH latest_dump_snapshot AS (
       , CAST(NULL AS INT)                                       AS width
       , CAST(NULL AS INT)                                       AS height
       , api_photo.attribution
+      , latest_api_versions._ingested_at                        AS ingested_at
       , 'api'                                                   AS source
     FROM
         latest_api_versions
@@ -159,6 +166,7 @@ SELECT
   , all_photos.width
   , all_photos.height
   , all_photos.attribution
+  , all_photos.ingested_at
   , all_photos.source
   , current_timestamp()                                         AS _loaded_at
 FROM

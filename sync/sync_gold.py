@@ -1,5 +1,6 @@
+import argparse
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pyodbc
 from databricks import sql as databricks_sql
@@ -13,6 +14,7 @@ SQL_SERVER_CONNECTION = (
     "Encrypt=yes;TrustServerCertificate=yes;"
 )
 BATCH_SIZE = 50_000
+WATERMARK_OVERLAP = timedelta(hours=1)
 
 INT = (pyodbc.SQL_INTEGER, 0, 0)
 BIGINT = (pyodbc.SQL_BIGINT, 0, 0)
@@ -29,7 +31,7 @@ def decimal(precision, scale):
     return (pyodbc.SQL_DECIMAL, precision, scale)
 
 
-# each gold table, the stage table it lands in, and the stage column types in the same order
+# tables with a gold_table are extracted incrementally on changed_at, the others always in full
 TABLES = [
     {
         "stage_table": "stage.Observer",
@@ -75,6 +77,7 @@ TABLES = [
     },
     {
         "stage_table": "stage.Photo",
+        "gold_table": "inat.gold.dim_photo",
         "columns": [
             "ID", "ID_Observer", "License", "Extension", "Width", "Height",
             "SquareUrl", "MediumUrl", "Attribution",
@@ -100,6 +103,7 @@ TABLES = [
     },
     {
         "stage_table": "stage.Observation",
+        "gold_table": "inat.gold.fct_observations",
         "columns": [
             "ObservationUuid", "InatObservationID", "ID_Taxon", "ID_Observer", "ObservedDate",
             "Latitude", "Longitude", "PositionalAccuracy", "PhotoCount", "Source", "UpdatedDate",
@@ -127,6 +131,7 @@ TABLES = [
     },
     {
         "stage_table": "stage.Observation_Photo",
+        "gold_table": "inat.gold.bridge_observation_photo",
         "columns": ["ObservationUuid", "ID_Photo", "PhotoPosition"],
         "input_sizes": [nvarchar(36), BIGINT, INT],
         "query": """
@@ -148,6 +153,11 @@ def to_sql_value(value):
     return value
 
 
+def as_utc(value):
+    # sql server returns naive datetimes, they are utc by convention
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+
+
 def connect_databricks():
     databricks_config = Config(profile=DATABRICKS_PROFILE)
     return databricks_sql.connect(
@@ -157,10 +167,48 @@ def connect_databricks():
     )
 
 
-def load_table(table, databricks_connection, sql_server_connection):
+def read_watermarks(sql_server_connection):
+    cursor = sql_server_connection.cursor()
+    cursor.execute("SELECT TableName, LastUpdatedDate FROM sync.Watermark")
+    return {row.TableName: row.LastUpdatedDate for row in cursor.fetchall() if row.LastUpdatedDate}
+
+
+def save_watermarks(sql_server_connection, new_watermarks):
+    cursor = sql_server_connection.cursor()
+    for gold_table, watermark in new_watermarks.items():
+        cursor.execute(
+            """
+            UPDATE sync.Watermark
+            SET
+                LastUpdatedDate = ?
+              , UpdatedDate     = SYSUTCDATETIME()
+            WHERE
+                TableName = ?;
+
+            IF @@ROWCOUNT = 0 BEGIN
+                INSERT INTO sync.Watermark (TableName, LastUpdatedDate) VALUES (?, ?);
+            END
+            """,
+            to_sql_value(watermark), gold_table, gold_table, to_sql_value(watermark),
+        )
+
+
+def read_current_max_changed_at(databricks_connection, gold_table):
+    with databricks_connection.cursor() as databricks_cursor:
+        databricks_cursor.execute(f"SELECT MAX(changed_at) FROM {gold_table}")
+        return databricks_cursor.fetchone()[0]
+
+
+def load_table(table, databricks_connection, sql_server_connection, extract_window):
     column_list = ", ".join(table["columns"])
     placeholders = ", ".join("?" for _ in table["columns"])
     insert_statement = f"INSERT INTO {table['stage_table']} ({column_list}) VALUES ({placeholders})"
+
+    query = table["query"]
+    query_parameters = None
+    if extract_window is not None:
+        query += " WHERE changed_at > :watermark_from AND changed_at <= :watermark_to"
+        query_parameters = extract_window
 
     sql_server_cursor = sql_server_connection.cursor()
     sql_server_cursor.fast_executemany = True
@@ -169,7 +217,7 @@ def load_table(table, databricks_connection, sql_server_connection):
     start_time = time.time()
 
     with databricks_connection.cursor() as databricks_cursor:
-        databricks_cursor.execute(table["query"])
+        databricks_cursor.execute(query, query_parameters)
 
         while True:
             batch = databricks_cursor.fetchmany(BATCH_SIZE)
@@ -191,18 +239,17 @@ def load_table(table, databricks_connection, sql_server_connection):
     print(f"{datetime.now():%H:%M:%S}  {table['stage_table']}: done, {rows_loaded:,} rows")
 
 
-def run_merge(sql_server_connection):
-    # the merge procedures manage their own transactions, so no outer transaction here
-    sql_server_connection.autocommit = True
+def run_merge(sql_server_connection, is_full_extract):
     cursor = sql_server_connection.cursor()
 
     cursor.execute(
         """
         SET NOCOUNT ON;
         DECLARE @ID_Run BIGINT;
-        EXEC sync.spMerge_All @IsFullExtract = 1, @ID_Run = @ID_Run OUTPUT;
+        EXEC sync.spMerge_All @IsFullExtract = ?, @ID_Run = @ID_Run OUTPUT;
         SELECT @ID_Run;
-        """
+        """,
+        1 if is_full_extract else 0,
     )
     id_run = cursor.fetchone()[0]
 
@@ -234,22 +281,50 @@ def run_merge(sql_server_connection):
         )
 
 
-def sync_gold():
+def sync_gold(force_full_extract):
     sync_start_time = time.time()
 
     with connect_databricks() as databricks_connection:
         sql_server_connection = pyodbc.connect(SQL_SERVER_CONNECTION, autocommit=False)
         try:
+            incremental_tables = [table for table in TABLES if "gold_table" in table]
+            stored_watermarks = read_watermarks(sql_server_connection)
+
+            # without a watermark for every incremental table there is nothing to start from
+            is_full_extract = force_full_extract or any(
+                table["gold_table"] not in stored_watermarks for table in incremental_tables
+            )
+            print(f"{datetime.now():%H:%M:%S}  mode: {'full' if is_full_extract else 'incremental'}")
+
+            # the upper bound of this run, read before extracting
+            new_watermarks = {}
+            for table in incremental_tables:
+                current_max = read_current_max_changed_at(databricks_connection, table["gold_table"])
+                if current_max is not None:
+                    new_watermarks[table["gold_table"]] = current_max
+
             cursor = sql_server_connection.cursor()
             for table in TABLES:
                 cursor.execute(f"TRUNCATE TABLE {table['stage_table']}")
             sql_server_connection.commit()
 
             for table in TABLES:
-                load_table(table, databricks_connection, sql_server_connection)
+                extract_window = None
+                gold_table = table.get("gold_table")
+                if not is_full_extract and gold_table in new_watermarks:
+                    extract_window = {
+                        "watermark_from": as_utc(stored_watermarks[gold_table]) - WATERMARK_OVERLAP,
+                        "watermark_to": new_watermarks[gold_table],
+                    }
+                load_table(table, databricks_connection, sql_server_connection, extract_window)
 
             print(f"{datetime.now():%H:%M:%S}  merging stage into the serving tables...")
-            run_merge(sql_server_connection)
+            # the merge procedures manage their own transactions
+            sql_server_connection.autocommit = True
+            run_merge(sql_server_connection, is_full_extract)
+
+            # only move the watermarks once the merge succeeded
+            save_watermarks(sql_server_connection, new_watermarks)
         finally:
             sql_server_connection.close()
 
@@ -257,4 +332,7 @@ def sync_gold():
 
 
 if __name__ == "__main__":
-    sync_gold()
+    argument_parser = argparse.ArgumentParser(description="sync databricks gold into sql server")
+    argument_parser.add_argument("--full", action="store_true", help="extract everything and delete what is gone")
+    arguments = argument_parser.parse_args()
+    sync_gold(force_full_extract=arguments.full)

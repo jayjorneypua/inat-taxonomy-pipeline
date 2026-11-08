@@ -10,5 +10,6 @@ SELECT
   , quality_grade
   , updated_at
   , source
+  , ingested_at       AS changed_at
 FROM
     {{ source('silver', 'observations') }}

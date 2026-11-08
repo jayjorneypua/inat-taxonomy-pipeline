@@ -33,9 +33,15 @@ AS BEGIN
         ON target_observers.ID = source_observers.ID
     WHERE
         EXISTS (
-            SELECT target_observers.Login, target_observers.Name, target_observers.DisplayName
+            SELECT
+                target_observers.Login        COLLATE Latin1_General_100_BIN2
+              , target_observers.Name         COLLATE Latin1_General_100_BIN2
+              , target_observers.DisplayName  COLLATE Latin1_General_100_BIN2
             EXCEPT
-            SELECT source_observers.Login, source_observers.Name, source_observers.DisplayName
+            SELECT
+                source_observers.Login        COLLATE Latin1_General_100_BIN2
+              , source_observers.Name         COLLATE Latin1_General_100_BIN2
+              , source_observers.DisplayName  COLLATE Latin1_General_100_BIN2
         );
 
     SET @RowsUpdated = @@ROWCOUNT;

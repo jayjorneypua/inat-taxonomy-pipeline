@@ -112,14 +112,30 @@ AS BEGIN
     WHERE
         EXISTS (
             SELECT
-                target_taxa.ID_Parent, target_taxa.ScientificName, target_taxa.CommonName, target_taxa.Rank
-              , target_taxa.RankLevel, target_taxa.Path, target_taxa.Level, target_taxa.HasChildren
-              , target_taxa.Active, target_taxa.IsInTree, target_taxa.SnapshotDate
+                target_taxa.ID_Parent
+              , target_taxa.ScientificName  COLLATE Latin1_General_100_BIN2
+              , target_taxa.CommonName      COLLATE Latin1_General_100_BIN2
+              , target_taxa.Rank            COLLATE Latin1_General_100_BIN2
+              , target_taxa.RankLevel
+              , target_taxa.Path            COLLATE Latin1_General_100_BIN2
+              , target_taxa.Level
+              , target_taxa.HasChildren
+              , target_taxa.Active
+              , target_taxa.IsInTree
+              , target_taxa.SnapshotDate
             EXCEPT
             SELECT
-                source_taxa.ID_Parent, source_taxa.ScientificName, source_taxa.CommonName, source_taxa.Rank
-              , source_taxa.RankLevel, source_taxa.Path, source_taxa.Level, source_taxa.HasChildren
-              , source_taxa.Active, source_taxa.IsInTree, source_taxa.SnapshotDate
+                source_taxa.ID_Parent
+              , source_taxa.ScientificName  COLLATE Latin1_General_100_BIN2
+              , source_taxa.CommonName      COLLATE Latin1_General_100_BIN2
+              , source_taxa.Rank            COLLATE Latin1_General_100_BIN2
+              , source_taxa.RankLevel
+              , source_taxa.Path            COLLATE Latin1_General_100_BIN2
+              , source_taxa.Level
+              , source_taxa.HasChildren
+              , source_taxa.Active
+              , source_taxa.IsInTree
+              , source_taxa.SnapshotDate
         );
 
     SET @RowsUpdated = @@ROWCOUNT;
