@@ -5,6 +5,7 @@
 -- History:
 -- 2026-11-08  Jay Jorney Pua          System user and group types.
 -- 2026-11-08  Jay Jorney Pua          Resource types and roles.
+-- 2026-11-08  Jay Jorney Pua          App resources, permissions and what each role can do.
 --=====================================================================================================
 
 ------------------------------------------------------------------------------------
@@ -121,4 +122,149 @@ WHERE
         SELECT 1
         FROM security.Role existing_roles
         WHERE existing_roles.Name = seed_roles.Name
+    );
+
+------------------------------------------------------------------------------------
+-- App resources: pages first, then the buttons inside them
+------------------------------------------------------------------------------------
+INSERT INTO security.Resource (
+    ID_Parent
+  , ID_ResourceType
+  , Code
+  , Name
+  , DisplayOrder
+  , ID_CreatedBy
+)
+SELECT
+    NULL
+  , resource_types.ID
+  , seed_pages.Code
+  , seed_pages.Name
+  , seed_pages.DisplayOrder
+  , 1
+FROM (
+    VALUES
+        (N'page.dashboard', N'Dashboard',      1)
+      , (N'page.taxonomy',  N'Taxonomy tree',  2)
+      , (N'page.admin',     N'Administration', 3)
+) seed_pages (Code, Name, DisplayOrder)
+INNER JOIN
+    security.ResourceType resource_types
+    ON resource_types.Name = N'Page'
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM security.Resource existing_resources
+        WHERE existing_resources.Code = seed_pages.Code
+    );
+
+INSERT INTO security.Resource (
+    ID_Parent
+  , ID_ResourceType
+  , Code
+  , Name
+  , DisplayOrder
+  , ID_CreatedBy
+)
+SELECT
+    parent_pages.ID
+  , resource_types.ID
+  , seed_buttons.Code
+  , seed_buttons.Name
+  , seed_buttons.DisplayOrder
+  , 1
+FROM (
+    VALUES
+        (N'button.observations.export', N'Export observations', N'page.dashboard', 1)
+) seed_buttons (Code, Name, ParentCode, DisplayOrder)
+INNER JOIN
+    security.Resource parent_pages
+    ON parent_pages.Code = seed_buttons.ParentCode
+INNER JOIN
+    security.ResourceType resource_types
+    ON resource_types.Name = N'Button'
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM security.Resource existing_resources
+        WHERE existing_resources.Code = seed_buttons.Code
+    );
+
+-- set Path and Level for any resource that doesn't have one yet, parents have lower ids
+DECLARE @ResourceWithoutPathID INT = (SELECT MIN(ID) FROM security.Resource WHERE Path IS NULL);
+
+WHILE @ResourceWithoutPathID IS NOT NULL BEGIN
+    EXEC security.spTreeNode_SetPath @TableName = N'Resource', @ID = @ResourceWithoutPathID;
+    SET @ResourceWithoutPathID = (SELECT MIN(ID) FROM security.Resource WHERE Path IS NULL);
+END
+
+------------------------------------------------------------------------------------
+-- Permissions
+------------------------------------------------------------------------------------
+INSERT INTO security.Permission (
+    ID_Resource
+  , Action
+  , Code
+  , Description
+  , ID_CreatedBy
+)
+SELECT
+    resources.ID
+  , seed_permissions.Action
+  , seed_permissions.Code
+  , seed_permissions.Description
+  , 1
+FROM (
+    VALUES
+        (N'page.dashboard',             N'view',    N'dashboard.view',      N'Open the dashboard')
+      , (N'page.taxonomy',              N'view',    N'taxonomy.view',       N'Open the taxonomy tree')
+      , (N'button.observations.export', N'execute', N'observations.export', N'Export observations')
+      , (N'page.admin',                 N'manage',  N'admin.users.manage',  N'Manage users, groups and roles')
+) seed_permissions (ResourceCode, Action, Code, Description)
+INNER JOIN
+    security.Resource resources
+    ON resources.Code = seed_permissions.ResourceCode
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM security.Permission existing_permissions
+        WHERE existing_permissions.Code = seed_permissions.Code
+    );
+
+------------------------------------------------------------------------------------
+-- What each role can do
+------------------------------------------------------------------------------------
+INSERT INTO security.Role_Permission (
+    ID_Role
+  , ID_Permission
+  , ID_CreatedBy
+)
+SELECT
+    roles.ID
+  , permissions.ID
+  , 1
+FROM (
+    VALUES
+        (N'Viewer',        N'dashboard.view')
+      , (N'Viewer',        N'taxonomy.view')
+      , (N'Analyst',       N'dashboard.view')
+      , (N'Analyst',       N'taxonomy.view')
+      , (N'Analyst',       N'observations.export')
+      , (N'Administrator', N'dashboard.view')
+      , (N'Administrator', N'taxonomy.view')
+      , (N'Administrator', N'observations.export')
+      , (N'Administrator', N'admin.users.manage')
+) seed_grants (RoleName, PermissionCode)
+INNER JOIN
+    security.Role roles
+    ON roles.Name = seed_grants.RoleName
+INNER JOIN
+    security.Permission permissions
+    ON permissions.Code = seed_grants.PermissionCode
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM security.Role_Permission existing_grants
+        WHERE existing_grants.ID_Role = roles.ID
+        AND existing_grants.ID_Permission = permissions.ID
     );
