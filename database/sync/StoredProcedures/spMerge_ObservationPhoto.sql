@@ -2,10 +2,14 @@
 --                                        sync spMerge_ObservationPhoto
 --=====================================================================================================
 -- Purpose:  Moves stage.Observation_Photo into dbo.Observation_Photo. Stage is keyed by uuid,
---           so it is translated to dbo.Observation.ID first. Deletes pairs gone from gold
---           (full extract only), updates changed positions, inserts new pairs.
+--           so it is translated to dbo.Observation.ID first.
+--           Full extract: deletes every pair gone from gold.
+--           Incremental: only observations present in stage were re-extracted, with all their
+--           photos, so their pairs that are no longer in stage are deleted. Others are untouched.
+--           Then updates changed positions and inserts new pairs.
 -- History:
 -- 2026-11-08  Jay Jorney Pua          Created the procedure.
+-- 2026-11-09  Jay Jorney Pua          Incremental mode removes stale pairs of re-extracted observations.
 --=====================================================================================================
 CREATE PROCEDURE sync.spMerge_ObservationPhoto
     @ID_Run             BIGINT
@@ -19,7 +23,7 @@ AS BEGIN
     DECLARE @RowsInserted   INT;
     DECLARE @RowsDeleted    INT          = 0;
 
-    -- translate uuid to the internal observation id once, for all three statements
+    -- translate uuid to the internal observation id once, for all statements
     SELECT
         observations.ID                     AS ID_Observation
       , source_pairs.ID_Photo
@@ -44,6 +48,25 @@ AS BEGIN
             dbo.Observation_Photo target_pairs
         WHERE
             NOT EXISTS (
+                SELECT 1
+                FROM #source_pairs source_pairs
+                WHERE source_pairs.ID_Observation = target_pairs.ID_Observation
+                AND source_pairs.ID_Photo = target_pairs.ID_Photo
+            );
+
+        SET @RowsDeleted = @@ROWCOUNT;
+    END
+    ELSE BEGIN
+        DELETE target_pairs
+        FROM
+            dbo.Observation_Photo target_pairs
+        WHERE
+            EXISTS (
+                SELECT 1
+                FROM #source_pairs source_pairs
+                WHERE source_pairs.ID_Observation = target_pairs.ID_Observation
+            )
+        AND NOT EXISTS (
                 SELECT 1
                 FROM #source_pairs source_pairs
                 WHERE source_pairs.ID_Observation = target_pairs.ID_Observation

@@ -41,12 +41,24 @@ AS BEGIN
     WHERE
         EXISTS (
             SELECT
-                target_photos.ID_Observer, target_photos.License, target_photos.Extension, target_photos.Width
-              , target_photos.Height, target_photos.SquareUrl, target_photos.MediumUrl, target_photos.Attribution
+                target_photos.ID_Observer
+              , target_photos.License       COLLATE Latin1_General_100_BIN2
+              , target_photos.Extension     COLLATE Latin1_General_100_BIN2
+              , target_photos.Width
+              , target_photos.Height
+              , target_photos.SquareUrl     COLLATE Latin1_General_100_BIN2
+              , target_photos.MediumUrl     COLLATE Latin1_General_100_BIN2
+              , target_photos.Attribution   COLLATE Latin1_General_100_BIN2
             EXCEPT
             SELECT
-                source_photos.ID_Observer, source_photos.License, source_photos.Extension, source_photos.Width
-              , source_photos.Height, source_photos.SquareUrl, source_photos.MediumUrl, source_photos.Attribution
+                source_photos.ID_Observer
+              , source_photos.License       COLLATE Latin1_General_100_BIN2
+              , source_photos.Extension     COLLATE Latin1_General_100_BIN2
+              , source_photos.Width
+              , source_photos.Height
+              , source_photos.SquareUrl     COLLATE Latin1_General_100_BIN2
+              , source_photos.MediumUrl     COLLATE Latin1_General_100_BIN2
+              , source_photos.Attribution   COLLATE Latin1_General_100_BIN2
         );
 
     SET @RowsUpdated = @@ROWCOUNT;

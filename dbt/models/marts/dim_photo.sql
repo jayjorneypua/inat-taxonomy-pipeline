@@ -8,12 +8,14 @@ WITH photo_versions AS (
       , photos.width
       , photos.height
       , photos.attribution
+      , photos.changed_at
       , observations.observer_id
       , ROW_NUMBER() OVER (
             PARTITION BY
                 photos.photo_id
             ORDER BY
                 CASE WHEN photos.source = 'api' THEN 1 ELSE 2 END
+              , photos.changed_at DESC
         )                                                           AS version_rank
     FROM
         {{ ref('stg_observation_photos') }} photos
@@ -48,6 +50,7 @@ SELECT
         END
     )                                                               AS attribution
   , photo_versions.observer_id
+  , photo_versions.changed_at
 FROM
     photo_versions
 LEFT JOIN
