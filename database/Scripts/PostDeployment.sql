@@ -4,6 +4,7 @@
 -- Purpose:  Runs after every publish. Every insert checks first, so reruns never duplicate.
 -- History:
 -- 2026-11-08  Jay Jorney Pua          System user and group types.
+-- 2026-11-08  Jay Jorney Pua          Resource types and roles.
 --=====================================================================================================
 
 ------------------------------------------------------------------------------------
@@ -66,4 +67,58 @@ WHERE
         SELECT 1
         FROM security.GroupType existing_types
         WHERE existing_types.Name = seed_types.Name
+    );
+
+------------------------------------------------------------------------------------
+-- Resource types
+------------------------------------------------------------------------------------
+INSERT INTO security.ResourceType (
+    Name
+  , Description
+  , DisplayOrder
+  , ID_CreatedBy
+)
+SELECT
+    seed_types.Name
+  , seed_types.Description
+  , seed_types.DisplayOrder
+  , 1
+FROM (
+    VALUES
+        (N'Page',   N'A screen in the web app',                    1)
+      , (N'Button', N'An action inside a page',                    2)
+      , (N'Api',    N'An api endpoint',                            3)
+) seed_types (Name, Description, DisplayOrder)
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM security.ResourceType existing_types
+        WHERE existing_types.Name = seed_types.Name
+    );
+
+------------------------------------------------------------------------------------
+-- Roles
+------------------------------------------------------------------------------------
+INSERT INTO security.Role (
+    Name
+  , Description
+  , DisplayOrder
+  , ID_CreatedBy
+)
+SELECT
+    seed_roles.Name
+  , seed_roles.Description
+  , seed_roles.DisplayOrder
+  , 1
+FROM (
+    VALUES
+        (N'Viewer',        N'Can view dashboards and the taxonomy tree',          1)
+      , (N'Analyst',       N'Viewer plus exports and detailed observation data',  2)
+      , (N'Administrator', N'Manages users, groups, roles and permissions',       3)
+) seed_roles (Name, Description, DisplayOrder)
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM security.Role existing_roles
+        WHERE existing_roles.Name = seed_roles.Name
     );
