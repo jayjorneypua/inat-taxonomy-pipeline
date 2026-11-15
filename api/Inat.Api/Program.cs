@@ -29,6 +29,10 @@ if (args.Length > 0 && args[0] == "hash-password")
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
+// which API instance this is, shown in the X-Instance header so you can see the load balancer at work.
+// set it with --Instance:Name api-1, otherwise it falls back to machine name and process id
+string instanceName = builder.Configuration["Instance:Name"] ?? $"{Environment.MachineName}-{Environment.ProcessId}";
+
 TokenService tokenService = new TokenService(builder.Configuration);
 builder.Services.AddSingleton(tokenService);
 
@@ -62,7 +66,7 @@ builder.Services.AddAuthorization();
 // caching: HybridCache keeps answers in memory (level 1).
 // when ConnectionStrings:Redis is set, redis is registered as IDistributedCache and
 // HybridCache uses it as level 2 automatically, so answers survive an API restart
-// and can be shared by several API instances.
+// and are shared by every API instance behind the load balancer.
 string? redisConnectionString = builder.Configuration.GetConnectionString("Redis");
 string databaseName = builder.Configuration["Database:Name"] ?? "inat";
 string redisInstanceName = $"inat:{databaseName}:";
@@ -91,6 +95,8 @@ builder.Services.AddScoped<QueryCache>();
 
 WebApplication app = builder.Build();
 
+app.Logger.LogInformation("Instance: {InstanceName}", instanceName);
+
 if (isRedisEnabled)
 {
     app.Logger.LogInformation("Cache: memory + redis level 2, key prefix {RedisInstanceName}", redisInstanceName);
@@ -99,6 +105,13 @@ else
 {
     app.Logger.LogInformation("Cache: memory only (ConnectionStrings:Redis is empty)");
 }
+
+// first in the pipeline, so even error responses say which instance answered
+app.Use(async (HttpContext context, RequestDelegate next) =>
+{
+    context.Response.Headers["X-Instance"] = instanceName;
+    await next(context);
+});
 
 app.UseExceptionHandler();
 

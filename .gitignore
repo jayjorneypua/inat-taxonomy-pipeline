@@ -231,3 +231,5 @@ bin/
 obj/
 
 tests/sql/results/
+
+.vscode/
