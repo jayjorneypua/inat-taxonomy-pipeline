@@ -33,7 +33,7 @@ export class Login {
     this.authService.login(trimmedUsername, this.password).subscribe({
       next: (): void => {
         this.isSubmitting.set(false);
-        this.router.navigateByUrl('/dashboard');
+        this.router.navigateByUrl('/explore');
       },
       error: (): void => {
         this.password = '';

@@ -71,6 +71,43 @@ public sealed class TaxonomyRepository(SqlConnectionFactory connectionFactory)
         return observationCards;
     }
 
+    public async Task<IReadOnlyList<TaxonPathItem>> GetTaxonPathAsync(
+        long sessionId,
+        int taxonId,
+        string? clientIpAddress,
+        CancellationToken cancellationToken)
+    {
+        await using SqlConnection connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using SqlCommand command = new SqlCommand("dbo.spTaxonomy_TaxonPath", connection);
+        command.CommandType = CommandType.StoredProcedure;
+
+        command.Parameters.Add("@ID_Session", SqlDbType.BigInt).Value = sessionId;
+        command.Parameters.Add("@ID_Taxon", SqlDbType.Int).Value = taxonId;
+        command.Parameters.Add("@ClientIpAddress", SqlDbType.VarChar, 45).Value = (object?)clientIpAddress ?? DBNull.Value;
+
+        List<TaxonPathItem> pathItems = new List<TaxonPathItem>();
+
+        await using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        int idOrdinal = reader.GetOrdinal("ID");
+        int scientificNameOrdinal = reader.GetOrdinal("ScientificName");
+        int commonNameOrdinal = reader.GetOrdinal("CommonName");
+        int rankOrdinal = reader.GetOrdinal("Rank");
+        int levelOrdinal = reader.GetOrdinal("Level");
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            pathItems.Add(new TaxonPathItem(
+                reader.GetInt32(idOrdinal),
+                reader.GetString(scientificNameOrdinal),
+                ReadNullableString(reader, commonNameOrdinal),
+                reader.GetString(rankOrdinal),
+                reader.GetInt32(levelOrdinal)));
+        }
+
+        return pathItems;
+    }
+
     private static string? ReadNullableString(SqlDataReader reader, int ordinal)
     {
         if (reader.IsDBNull(ordinal))

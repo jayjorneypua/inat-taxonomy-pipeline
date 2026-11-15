@@ -1,0 +1,114 @@
+<header class="top-bar">
+  <a class="brand" routerLink="/explore">iNat Taxonomy</a>
+  <button type="button" (click)="logout()">Log out</button>
+</header>
+
+<main class="content">
+  <nav class="breadcrumb">
+    @for (pathItem of path(); track pathItem.id; let isLast = $last) {
+      @if (isLast) {
+        <span class="current">{{ pathItem.commonName ?? pathItem.scientificName }}</span>
+      } @else {
+        <a [routerLink]="['/explore', pathItem.id]">{{ pathItem.commonName ?? pathItem.scientificName }}</a>
+        <span class="separator">›</span>
+      }
+    }
+  </nav>
+
+  @if (errorMessage(); as message) {
+    <p class="error">{{ message }}</p>
+  }
+
+  @if (currentTaxon(); as taxon) {
+    <section class="taxon-header">
+      <h1>{{ taxon.commonName ?? taxon.scientificName }}</h1>
+      <p class="subtitle"><em>{{ taxon.scientificName }}</em> · {{ taxon.rank }}</p>
+    </section>
+  }
+
+  <div class="layout">
+    <section class="panel">
+      <h2>Observations per month</h2>
+      @if (monthCounts().length === 0) {
+        <p class="muted">No observations to chart.</p>
+      } @else {
+        <div class="chart">
+          @for (month of monthCounts(); track month.monthStart) {
+            <div class="bar-column" [title]="(month.monthStart | date: 'MMM yyyy') + ': ' + (month.observationCount | number)">
+              <div class="bar" [style.height.%]="barHeightPercent(month.observationCount)"></div>
+              <span class="bar-label">
+                @if (isJanuary(month.monthStart)) {
+                  {{ month.monthStart.substring(0, 4) }}
+                }
+              </span>
+            </div>
+          }
+        </div>
+      }
+    </section>
+
+    <section class="panel">
+      <h2>Lower ranks</h2>
+      @if (isLoadingChildren()) {
+        <p class="muted">Loading...</p>
+      } @else if (children().length === 0) {
+        <p class="muted">No lower ranks observed.</p>
+      } @else {
+        <ul class="children">
+          @for (child of children(); track child.id) {
+            <li>
+              <a [routerLink]="['/explore', child.id]">
+                <span class="child-name">
+                  {{ child.commonName ?? child.scientificName }}
+                  <small><em>{{ child.scientificName }}</em> · {{ child.rank }}</small>
+                </span>
+                <span class="child-count">{{ child.observationCount | number }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  </div>
+
+  <section class="photos">
+    <h2>Latest observations</h2>
+    @if (isLoadingObservations()) {
+      <p class="muted">Loading photos...</p>
+    } @else if (observations().length === 0) {
+      <p class="muted">No observations with photos.</p>
+    } @else {
+      <div class="photo-grid">
+        @for (card of observations(); track card.observationId) {
+          <figure class="photo-card">
+            @if (card.mediumUrl) {
+              <img [src]="card.mediumUrl" [alt]="card.commonName ?? card.scientificName" loading="lazy" />
+            } @else {
+              <div class="no-photo">No photo</div>
+            }
+            <figcaption>
+              <strong>{{ card.commonName ?? card.scientificName }}</strong>
+              <em>{{ card.scientificName }}</em>
+              <span>{{ card.observerDisplayName }} · {{ card.observedDate | date: 'mediumDate' }}</span>
+              @if (card.attribution) {
+                <small class="credit">{{ card.attribution }}</small>
+              }
+            </figcaption>
+          </figure>
+        }
+      </div>
+
+      @if (nextCursor()) {
+        <div class="load-more">
+          <button type="button" (click)="loadMore()" [disabled]="isLoadingMore()">
+            @if (isLoadingMore()) {
+              Loading...
+            } @else {
+              Load more
+            }
+          </button>
+        </div>
+      }
+    }
+  </section>
+</main>
