@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
+using Inat.Api.Observability;
+using StackExchange.Redis;
 
 // helper mode: prints a password hash for creating a user, then exits.
 //   dotnet run -- hash-password              asks for the password without showing it
@@ -29,6 +31,7 @@ if (args.Length > 0 && args[0] == "hash-password")
 }
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+builder.AddInatLogging();
 
 // which API instance this is, shown in the X-Instance header so you can see the load balancer at work.
 // set it with --Instance:Name api-1, otherwise it falls back to machine name and process id
@@ -89,10 +92,26 @@ bool isRedisEnabled = string.IsNullOrWhiteSpace(redisConnectionString) == false;
 
 if (isRedisEnabled)
 {
+    // one shared redis connection, used by the cache and by the health check.
+    // AbortOnConnectFail = false lets the API start even when redis is down; it keeps reconnecting in the background.
+    // FailFast: while disconnected, commands fail at once instead of waiting in a queue, so the cache falls
+    // through to memory and sql right away. the short timeouts cover a redis that is connected but slow.
+    int redisTimeoutMs = builder.Configuration.GetValue<int>("Redis:TimeoutMs", 500);
+
+    ConfigurationOptions redisOptions = ConfigurationOptions.Parse(redisConnectionString ?? string.Empty);
+    redisOptions.AbortOnConnectFail = false;
+    redisOptions.BacklogPolicy = BacklogPolicy.FailFast;
+    redisOptions.ConnectTimeout = redisTimeoutMs;
+    redisOptions.SyncTimeout = redisTimeoutMs;
+    redisOptions.AsyncTimeout = redisTimeoutMs;
+
+    IConnectionMultiplexer redisConnection = ConnectionMultiplexer.Connect(redisOptions);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+
     // the database name is part of the prefix, so inat and inat_test_copy never share keys
     builder.Services.AddStackExchangeRedisCache(options =>
     {
-        options.Configuration = redisConnectionString;
+        options.ConnectionMultiplexerFactory = () => Task.FromResult(redisConnection);
         options.InstanceName = redisInstanceName;
     });
 }
@@ -107,6 +126,10 @@ builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<TaxonomyRepository>();
 builder.Services.AddScoped<AdminRepository>();
 builder.Services.AddScoped<QueryCache>();
+
+// /health/live and /health/ready
+builder.Services.AddInatHealthChecks(isRedisEnabled);
+builder.Services.AddInatRateLimiting(builder.Configuration);
 
 WebApplication app = builder.Build();
 
@@ -123,6 +146,7 @@ else
 
 // first in the pipeline, so every controller already sees the real client address
 app.UseForwardedHeaders();
+app.UseInatRequestLogging();
 
 // even error responses say which instance answered
 app.Use(async (HttpContext context, RequestDelegate next) =>
@@ -143,6 +167,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseRateLimiter();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -154,6 +179,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapInatHealthChecks();
 
 app.Run();
 
