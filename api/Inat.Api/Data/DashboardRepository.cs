@@ -51,4 +51,35 @@ public sealed class DashboardRepository(SqlConnectionFactory connectionFactory)
 
         return taxonChildCounts;
     }
+
+    public async Task<IReadOnlyList<ObservationMonthCount>> GetObservationsByMonthAsync(
+        long sessionId,
+        int? taxonId,
+        string? clientIpAddress,
+        CancellationToken cancellationToken)
+    {
+        await using SqlConnection connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using SqlCommand command = new SqlCommand("dbo.spDashboard_ObservationsByMonth", connection);
+        command.CommandType = CommandType.StoredProcedure;
+
+        command.Parameters.Add("@ID_Session", SqlDbType.BigInt).Value = sessionId;
+        command.Parameters.Add("@ID_Taxon", SqlDbType.Int).Value = (object?)taxonId ?? DBNull.Value;
+        command.Parameters.Add("@ClientIpAddress", SqlDbType.VarChar, 45).Value = (object?)clientIpAddress ?? DBNull.Value;
+
+        List<ObservationMonthCount> monthCounts = new List<ObservationMonthCount>();
+
+        await using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        int monthStartOrdinal = reader.GetOrdinal("MonthStart");
+        int observationCountOrdinal = reader.GetOrdinal("ObservationCount");
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            monthCounts.Add(new ObservationMonthCount(
+                DateOnly.FromDateTime(reader.GetDateTime(monthStartOrdinal)),
+                reader.GetInt32(observationCountOrdinal)));
+        }
+
+        return monthCounts;
+    }
 }

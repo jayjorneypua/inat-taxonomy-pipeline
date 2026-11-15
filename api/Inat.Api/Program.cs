@@ -1,5 +1,6 @@
 using System.Text;
 using Inat.Api.Data;
+using Inat.Api.Infrastructure;
 using Inat.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -22,6 +23,10 @@ builder.Services.AddSingleton(tokenService);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+
+// one place that turns errors into 401, 403 or a generic 500
+builder.Services.AddExceptionHandler<DatabaseExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 // every request with "Authorization: Bearer <token>" is checked: signature, issuer, audience, expiry
 builder.Services
@@ -47,8 +52,11 @@ builder.Services.AddAuthorization();
 builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<SecurityRepository>();
 builder.Services.AddScoped<DashboardRepository>();
+builder.Services.AddScoped<TaxonomyRepository>();
 
 WebApplication app = builder.Build();
+
+app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
 {
