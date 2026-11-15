@@ -85,7 +85,16 @@
         @for (card of observations(); track card.observationId) {
           <figure class="photo-card">
             @if (card.mediumUrl) {
-              <img [src]="card.mediumUrl" [alt]="card.commonName ?? card.scientificName" loading="lazy" />
+              <!-- the grid shows small.jpg (240 px, about 5x lighter); clicking opens medium.jpg in a new tab -->
+              <a [href]="card.mediumUrl" target="_blank" rel="noopener">
+                <img
+                  [src]="card.mediumUrl.replace('/medium.', '/small.')"
+                  [alt]="card.commonName ?? card.scientificName"
+                  width="240"
+                  height="240"
+                  loading="lazy"
+                  decoding="async" />
+              </a>
             } @else {
               <div class="no-photo">No photo</div>
             }
