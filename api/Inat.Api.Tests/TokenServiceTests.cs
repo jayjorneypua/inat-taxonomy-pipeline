@@ -47,7 +47,7 @@ public sealed class TokenServiceTests
         byte[] secondHash = TokenService.HashRefreshToken("same-token");
 
         CollectionAssert.AreEqual(firstHash, secondHash);
-        Assert.AreEqual(32, firstHash.Length);
+        Assert.HasCount(32, firstHash);
     }
 
     [TestMethod]

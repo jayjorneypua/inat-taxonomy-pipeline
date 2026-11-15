@@ -81,7 +81,7 @@ public sealed class RepositoryIntegrationTests
         IReadOnlyList<TaxonChildCount> children =
             await dashboardRepository.GetTaxonChildrenCountsAsync(sessionId, null, null, CancellationToken.None);
 
-        Assert.AreEqual(2, children.Count);
+        Assert.HasCount(2, children);
         Assert.AreEqual("Animalia", children[0].ScientificName);
         Assert.AreEqual(3, children[0].ObservationCount);
         Assert.AreEqual("Plantae", children[1].ScientificName);
@@ -96,7 +96,7 @@ public sealed class RepositoryIntegrationTests
         IReadOnlyList<TaxonChildCount> children =
             await dashboardRepository.GetTaxonChildrenCountsAsync(sessionId, null, null, CancellationToken.None);
 
-        Assert.AreEqual(1, children.Count);
+        Assert.HasCount(1, children);
         Assert.AreEqual("Animalia", children[0].ScientificName);
         Assert.AreEqual(3, children[0].ObservationCount);
     }
@@ -109,7 +109,7 @@ public sealed class RepositoryIntegrationTests
         IReadOnlyList<ObservationCard> firstPage = await taxonomyRepository.GetObservationsPageAsync(
             sessionId, AmphibiaTaxonId, 2, null, null, null, CancellationToken.None);
 
-        Assert.AreEqual(2, firstPage.Count);
+        Assert.HasCount(2, firstPage);
         Assert.AreEqual(new DateOnly(2026, 1, 12), firstPage[0].ObservedDate);
         Assert.AreEqual(new DateOnly(2026, 1, 11), firstPage[1].ObservedDate);
 
@@ -117,7 +117,7 @@ public sealed class RepositoryIntegrationTests
         IReadOnlyList<ObservationCard> secondPage = await taxonomyRepository.GetObservationsPageAsync(
             sessionId, AmphibiaTaxonId, 2, lastCard.ObservedDate, lastCard.ObservationId, null, CancellationToken.None);
 
-        Assert.AreEqual(1, secondPage.Count);
+        Assert.HasCount(1, secondPage);
         Assert.AreEqual(new DateOnly(2026, 1, 10), secondPage[0].ObservedDate);
         Assert.IsNotNull(secondPage[0].MediumUrl);
     }
