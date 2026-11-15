@@ -1,0 +1,24 @@
+<main class="login-page">
+  <form class="login-card" (ngSubmit)="submit()">
+    <h1>iNat Taxonomy</h1>
+    <p class="subtitle">Sign in to explore California's observations</p>
+
+    <label for="username">Username</label>
+    <input id="username" name="username" type="text" autocomplete="username" [(ngModel)]="username" />
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" autocomplete="current-password" [(ngModel)]="password" />
+
+    @if (errorMessage(); as message) {
+      <p class="error">{{ message }}</p>
+    }
+
+    <button type="submit" [disabled]="isSubmitting()">
+      @if (isSubmitting()) {
+        Signing in...
+      } @else {
+        Sign in
+      }
+    </button>
+  </form>
+</main>
