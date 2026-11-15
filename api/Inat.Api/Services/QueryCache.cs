@@ -11,7 +11,8 @@ namespace Inat.Api.Services;
 //      changes apply immediately, even for answers that come from the cache
 //   2. the key holds the scope signature, so only sessions with the same scope share an answer
 //   3. the key holds the data version (last sync run), so a new sync makes old answers unreachable
-// HybridCache keeps answers in memory now; a distributed cache like redis can be added as a second level
+// HybridCache looks in memory first (level 1), then redis (level 2, when configured in Program.cs),
+// and only runs the query when both miss. X-Cache: HIT means either level answered.
 public sealed class QueryCache(HybridCache hybridCache, AccessRepository accessRepository)
 {
     private static readonly HybridCacheEntryOptions entryOptions = new HybridCacheEntryOptions
@@ -35,7 +36,7 @@ public sealed class QueryCache(HybridCache hybridCache, AccessRepository accessR
         string scopeHash = HashScopeSignature(accessContext.ScopeSignature);
         string cacheKey = $"{queryName}:v{accessContext.DataVersion}:s{scopeHash}:{queryArguments}";
 
-        // the factory only runs on a miss, so it tells us whether the answer was cached
+        // the factory only runs when memory and redis both miss, so it tells us whether the answer was cached
         bool wasLoaded = false;
 
         T value = await hybridCache.GetOrCreateAsync(

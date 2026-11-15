@@ -59,7 +59,25 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 
-// caching: in memory for now, a distributed cache like redis can be added as a second level later
+// caching: HybridCache keeps answers in memory (level 1).
+// when ConnectionStrings:Redis is set, redis is registered as IDistributedCache and
+// HybridCache uses it as level 2 automatically, so answers survive an API restart
+// and can be shared by several API instances.
+string? redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+string databaseName = builder.Configuration["Database:Name"] ?? "inat";
+string redisInstanceName = $"inat:{databaseName}:";
+bool isRedisEnabled = string.IsNullOrWhiteSpace(redisConnectionString) == false;
+
+if (isRedisEnabled)
+{
+    // the database name is part of the prefix, so inat and inat_test_copy never share keys
+    builder.Services.AddStackExchangeRedisCache(options =>
+    {
+        options.Configuration = redisConnectionString;
+        options.InstanceName = redisInstanceName;
+    });
+}
+
 builder.Services.AddHybridCache();
 
 // data access: one connection factory for the whole app, one repository per request
@@ -72,6 +90,15 @@ builder.Services.AddScoped<AdminRepository>();
 builder.Services.AddScoped<QueryCache>();
 
 WebApplication app = builder.Build();
+
+if (isRedisEnabled)
+{
+    app.Logger.LogInformation("Cache: memory + redis level 2, key prefix {RedisInstanceName}", redisInstanceName);
+}
+else
+{
+    app.Logger.LogInformation("Cache: memory only (ConnectionStrings:Redis is empty)");
+}
 
 app.UseExceptionHandler();
 
