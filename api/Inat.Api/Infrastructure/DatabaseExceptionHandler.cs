@@ -5,12 +5,15 @@ using Microsoft.Data.SqlClient;
 namespace Inat.Api.Infrastructure;
 
 // turns errors into http answers in one place, so controllers don't repeat try/catch.
-// the stored procedures throw 50020 for a bad session and 50021 for a missing permission.
+// the stored procedures throw 50020 for a bad session, 50021 for a missing permission and
+// 50040 to 50049 for invalid grid input (unknown sort column, filter not allowed...).
 // anything else is a 500 with a generic message: details go to the log, never to the client
 public sealed class DatabaseExceptionHandler(ILogger<DatabaseExceptionHandler> logger) : IExceptionHandler
 {
     private const int InvalidSessionErrorNumber = 50020;
     private const int MissingPermissionErrorNumber = 50021;
+    private const int FirstInvalidInputErrorNumber = 50040;
+    private const int LastInvalidInputErrorNumber = 50049;
 
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
@@ -31,6 +34,12 @@ public sealed class DatabaseExceptionHandler(ILogger<DatabaseExceptionHandler> l
             {
                 statusCode = StatusCodes.Status403Forbidden;
                 title = "You do not have permission to do this.";
+            }
+            else if (sqlException.Number >= FirstInvalidInputErrorNumber && sqlException.Number <= LastInvalidInputErrorNumber)
+            {
+                // these messages are written by our own procedures, so they are safe to show
+                statusCode = StatusCodes.Status400BadRequest;
+                title = sqlException.Message;
             }
         }
 

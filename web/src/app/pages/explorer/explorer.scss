@@ -240,3 +240,16 @@
     cursor: default;
   }
 }
+
+
+.top-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+
+  a {
+    color: var(--accent);
+    font-weight: 600;
+    text-decoration: none;
+  }
+}

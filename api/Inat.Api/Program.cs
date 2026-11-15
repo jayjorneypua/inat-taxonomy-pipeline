@@ -24,7 +24,7 @@ builder.Services.AddSingleton(tokenService);
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
-// one place that turns errors into 401, 403 or a generic 500
+// one place that turns errors into 400, 401, 403 or a generic 500
 builder.Services.AddExceptionHandler<DatabaseExceptionHandler>();
 builder.Services.AddProblemDetails();
 
@@ -53,6 +53,7 @@ builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<SecurityRepository>();
 builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<TaxonomyRepository>();
+builder.Services.AddScoped<AdminRepository>();
 
 WebApplication app = builder.Build();
 

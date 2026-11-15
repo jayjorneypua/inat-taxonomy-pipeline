@@ -1,6 +1,9 @@
 <header class="top-bar">
   <a class="brand" routerLink="/explore">iNat Taxonomy</a>
-  <button type="button" (click)="logout()">Log out</button>
+  <nav class="top-links">
+    <a routerLink="/admin/users">Users</a>
+    <button type="button" (click)="logout()">Log out</button>
+  </nav>
 </header>
 
 <main class="content">
