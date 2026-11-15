@@ -1,16 +1,19 @@
 # runs the playwright ui tests. playwright starts the api (on inat_test_copy) and the angular app itself,
 # so stop your own running api and web app first. jay's password is asked here and only lives for this run.
 # usage, from the repo root:
-#   .\tools\run_ui_tests.ps1           hidden browser, fastest
-#   .\tools\run_ui_tests.ps1 -Headed   visible browser, slowed down so you can watch it click and type
+#   .\tools\run_ui_tests.ps1                  hidden browser, fastest
+#   .\tools\run_ui_tests.ps1 -Headed          visible browser, slowed down so you can watch it click and type
+#   .\tools\run_ui_tests.ps1 -LoadBalanced    two api instances behind nginx (docker desktop must be running)
 param(
-    [switch]$Headed
+    [switch]$Headed,
+    [switch]$LoadBalanced
 )
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $databaseProject = Join-Path $repositoryRoot "database\inat.sqlproj"
 $dacpacPath = Join-Path $repositoryRoot "database\bin\Debug\inat.dacpac"
 $apiProject = Join-Path $repositoryRoot "api\Inat.Api"
+$composeFile = Join-Path $repositoryRoot "docker-compose.yml"
 $createViewerScript = Join-Path $repositoryRoot "tools\sql\create_test_viewer.sql"
 $webFolder = Join-Path $repositoryRoot "web"
 $copyConnectionString = "Server=.;Database=inat_test_copy;Integrated Security=True;Encrypt=True;TrustServerCertificate=True"
@@ -42,6 +45,26 @@ if ($viewerExitCode -ne 0) {
     exit 1
 }
 
+if ($LoadBalanced) {
+    Write-Host "starting redis and the load balancer..."
+    docker compose -f $composeFile up -d
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "docker compose failed. is docker desktop running?" -ForegroundColor Red
+        exit 1
+    }
+
+    # both instances start with --no-build, so build once here
+    Write-Host "building the api once for both instances..."
+    dotnet build $apiProject --nologo -v quiet
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "building the api failed" -ForegroundColor Red
+        exit 1
+    }
+
+    $env:E2E_LOAD_BALANCED = "1"
+    Write-Host "load balanced mode: api-1 on 5092, api-2 on 5093, nginx on 8080"
+}
+
 $env:E2E_VIEWER_USERNAME = "e2e.viewer"
 $env:E2E_VIEWER_PASSWORD = $viewerPassword
 
@@ -61,6 +84,7 @@ Remove-Item Env:E2E_USERNAME
 Remove-Item Env:E2E_VIEWER_PASSWORD
 Remove-Item Env:E2E_VIEWER_USERNAME
 Remove-Item Env:E2E_SLOW_MOTION_MILLISECONDS -ErrorAction SilentlyContinue
+Remove-Item Env:E2E_LOAD_BALANCED -ErrorAction SilentlyContinue
 
 if ($exitCode -eq 0) {
     Write-Host "all ui tests passed" -ForegroundColor Green
