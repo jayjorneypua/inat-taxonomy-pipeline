@@ -8,11 +8,22 @@ using Microsoft.Data.SqlClient;
 
 namespace Inat.Api.Controllers;
 
+// login, refresh and logout.
+// the access token (15 minutes) goes back in the json body and the client sends it as a bearer header.
+// the refresh token (7 days) only ever lives in a cookie:
+//   HttpOnly         javascript cannot read it, so an xss bug cannot steal it
+//   Secure           only sent over https (browsers treat localhost as secure too)
+//   SameSite=Strict  other websites cannot make the browser send it
+//   Path=/api/auth   only sent to login, refresh and logout, never with data requests
 [ApiController]
 [Route("api/auth")]
 public sealed class AuthController(SecurityRepository securityRepository, TokenService tokenService) : ControllerBase
 {
+    public const string RefreshCookieName = "inat_refresh";
+    public const string RefreshCookiePath = "/api/auth";
+
     private const string InvalidLoginMessage = "Invalid username or password.";
+    private const string PleaseLogInMessage = "Please log in again.";
     private const int UserCannotLogInErrorNumber = 50011;
     private static readonly PasswordHasher<object> passwordHasher = new PasswordHasher<object>();
 
@@ -69,16 +80,25 @@ public sealed class AuthController(SecurityRepository securityRepository, TokenS
             return Unauthorized(new { message = InvalidLoginMessage });
         }
 
+        SetRefreshCookie(refreshToken);
+
         AccessToken accessToken = tokenService.CreateAccessToken(sessionId);
-        return Ok(new TokenResponse(accessToken.Token, accessToken.ExpiresAt, refreshToken.Token, refreshToken.ExpiresAt));
+        return Ok(new TokenResponse(accessToken.Token, accessToken.ExpiresAt));
     }
 
+    // no body: the refresh token comes from the cookie the browser attaches by itself
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public async Task<ActionResult<TokenResponse>> Refresh(RefreshRequest request, CancellationToken cancellationToken)
+    public async Task<ActionResult<TokenResponse>> Refresh(CancellationToken cancellationToken)
     {
+        string? refreshTokenValue = Request.Cookies[RefreshCookieName];
+        if (string.IsNullOrEmpty(refreshTokenValue))
+        {
+            return Unauthorized(new { message = PleaseLogInMessage });
+        }
+
         string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-        byte[] oldTokenHash = TokenService.HashRefreshToken(request.RefreshToken);
+        byte[] oldTokenHash = TokenService.HashRefreshToken(refreshTokenValue);
         RefreshToken newRefreshToken = tokenService.CreateRefreshToken();
 
         SessionRefreshResult refreshResult = await securityRepository.RefreshSessionAsync(
@@ -88,28 +108,33 @@ public sealed class AuthController(SecurityRepository securityRepository, TokenS
             clientIpAddress,
             cancellationToken);
 
-        // invalid or reused: the client has to log in again
+        // invalid or reused: the cookie is useless now, remove it and make the client log in again
         if (refreshResult.Result != "ok" || refreshResult.SessionId is null)
         {
-            return Unauthorized(new { message = "Please log in again." });
+            DeleteRefreshCookie();
+            return Unauthorized(new { message = PleaseLogInMessage });
         }
 
+        SetRefreshCookie(newRefreshToken);
+
         AccessToken accessToken = tokenService.CreateAccessToken(refreshResult.SessionId.Value);
-        return Ok(new TokenResponse(accessToken.Token, accessToken.ExpiresAt, newRefreshToken.Token, newRefreshToken.ExpiresAt));
+        return Ok(new TokenResponse(accessToken.Token, accessToken.ExpiresAt));
     }
 
+    // allowed without a valid access token, so the cookie is always removed, even when the access token
+    // already expired. the session is revoked in the database whenever the access token is still valid
     [HttpPost("logout")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<IActionResult> Logout(CancellationToken cancellationToken)
     {
         long? sessionId = TokenService.GetSessionId(User);
-        if (sessionId is null)
+        if (sessionId != null)
         {
-            return Unauthorized();
+            string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+            await securityRepository.RevokeSessionAsync(sessionId.Value, "logout", clientIpAddress, cancellationToken);
         }
 
-        string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
-        await securityRepository.RevokeSessionAsync(sessionId.Value, "logout", clientIpAddress, cancellationToken);
+        DeleteRefreshCookie();
         return NoContent();
     }
 
@@ -127,5 +152,34 @@ public sealed class AuthController(SecurityRepository securityRepository, TokenS
         string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
         CurrentUser currentUser = await securityRepository.GetCurrentUserAsync(sessionId.Value, clientIpAddress, cancellationToken);
         return Ok(currentUser);
+    }
+
+    private void SetRefreshCookie(RefreshToken refreshToken)
+    {
+        CookieOptions cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Path = RefreshCookiePath,
+            Expires = new DateTimeOffset(refreshToken.ExpiresAt),
+            IsEssential = true
+        };
+
+        Response.Cookies.Append(RefreshCookieName, refreshToken.Token, cookieOptions);
+    }
+
+    // the browser only removes the cookie when name, path and flags match the ones it was set with
+    private void DeleteRefreshCookie()
+    {
+        CookieOptions cookieOptions = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true,
+            SameSite = SameSiteMode.Strict,
+            Path = RefreshCookiePath
+        };
+
+        Response.Cookies.Delete(RefreshCookieName, cookieOptions);
     }
 }
