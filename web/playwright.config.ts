@@ -9,10 +9,14 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: [['list'], ['html', { open: 'never' }]],
-  use: {
+    use: {
     baseURL: 'http://localhost:4200',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
+    launchOptions: {
+      // with -Headed, every click and keystroke is slowed down so a person can follow along
+      slowMo: Number(process.env['E2E_SLOW_MOTION_MILLISECONDS'] ?? '0'),
+    },
   },
   projects: [
     {
