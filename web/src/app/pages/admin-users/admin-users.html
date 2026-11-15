@@ -1,0 +1,103 @@
+<header class="top-bar">
+  <a class="brand" routerLink="/explore">iNat Taxonomy</a>
+  <nav class="top-links">
+    <a routerLink="/explore">Explorer</a>
+    <button type="button" (click)="logout()">Log out</button>
+  </nav>
+</header>
+
+<main class="content">
+  <h1>Users</h1>
+
+  <div class="filters">
+    <input
+      type="search"
+      placeholder="Search name, email, group or role"
+      [(ngModel)]="searchText"
+      (ngModelChange)="onSearchTyped()"
+    />
+
+    <div class="chip-group" role="group" aria-label="Status">
+      <span class="chip-label">Status</span>
+      @for (status of statusOptions; track status) {
+        <button
+          type="button"
+          class="chip"
+          [class.selected]="isStatusSelected(status)"
+          [attr.aria-pressed]="isStatusSelected(status)"
+          (click)="toggleStatus(status)"
+        >
+          {{ status }}
+        </button>
+      }
+    </div>
+
+    @if (hasActiveFilters()) {
+      <button type="button" class="clear" (click)="clearFilters()">Clear filters</button>
+    }
+  </div>
+
+  @if (errorMessage(); as message) {
+    <p class="error">{{ message }}</p>
+  } @else {
+    <div class="table-wrapper" [class.loading]="isLoading()">
+      <table>
+        <thead>
+          <tr>
+            <th><button type="button" class="sort" (click)="sortBy('Username')">Username {{ sortIndicator('Username') }}</button></th>
+            <th><button type="button" class="sort" (click)="sortBy('LastName')">Name {{ sortIndicator('LastName') }}</button></th>
+            <th><button type="button" class="sort" (click)="sortBy('Email')">Email {{ sortIndicator('Email') }}</button></th>
+            <th>Groups</th>
+            <th>Direct roles</th>
+            <th>Status</th>
+            <th class="number"><button type="button" class="sort" (click)="sortBy('LoginCount')">Logins {{ sortIndicator('LoginCount') }}</button></th>
+            <th><button type="button" class="sort" (click)="sortBy('LastLoginDate')">Last login {{ sortIndicator('LastLoginDate') }}</button></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of rows(); track row.id) {
+            <tr>
+              <td>{{ row.username }}</td>
+              <td>{{ row.firstName }} {{ row.lastName }}</td>
+              <td>{{ row.email }}</td>
+              <td>{{ row.groupNames }}</td>
+              <td>{{ row.roleNames }}</td>
+              <td>
+                @if (row.isLocked) {
+                  <span class="badge locked">Locked</span>
+                } @else if (row.active === false) {
+                  <span class="badge inactive">Inactive</span>
+                } @else {
+                  <span class="badge active">Active</span>
+                }
+              </td>
+              <td class="number">{{ row.loginCount | number }}</td>
+              <td>{{ row.lastLoginDate | date: 'medium' }}</td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="8" class="muted">
+                @if (isLoading()) {
+                  Loading...
+                } @else {
+                  No users match.
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pager">
+      <button type="button" (click)="goToPage(page() - 1)" [disabled]="page() <= 1">Previous</button>
+      <span>Page {{ page() }} of {{ totalPages() }} · {{ totalCount() | number }} users</span>
+      <button type="button" (click)="goToPage(page() + 1)" [disabled]="page() >= totalPages()">Next</button>
+      <select (change)="changePageSize($any($event.target).value)">
+        @for (size of pageSizes; track size) {
+          <option [value]="size" [selected]="size === pageSize()">{{ size }} per page</option>
+        }
+      </select>
+    </div>
+  }
+</main>

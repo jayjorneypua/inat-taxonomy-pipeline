@@ -27,7 +27,7 @@ DECLARE @AliceSessionID     BIGINT;
 
 INSERT INTO security.[Group] (ID_GroupType, Name, ID_CreatedBy) VALUES (@OrganizationTypeID, N'Finance', 1);
 SET @FinanceID = SCOPE_IDENTITY();
-INSERT INTO security.[Group] (ID_GroupType, Name, ID_CreatedBy) VALUES (@OrganizationTypeID, N'Herp Team', 1);
+INSERT INTO security.[Group] (ID_GroupType, Name, ID_CreatedBy) VALUES (@OrganizationTypeID, N'Herp Team Test', 1);
 SET @HerpTeamID = SCOPE_IDENTITY();
 
 INSERT INTO security.[User] (FirstName, LastName, Username, Email, PasswordHash, ID_CreatedBy) VALUES (N'Alice', N'Anders', N'gridtest.alice', N'alice@example.com', N'x', 1);
@@ -65,9 +65,9 @@ EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'gridtest', 
 PRINT '--- 4. page 2 with 2 per page (expect carol and dave, TotalCount still 5)';
 EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'gridtest', @Page = 2, @PageSize = 2;
 
-PRINT '--- 5. filter IsLocked = true (expect dave)';
+PRINT '--- 5. Status in Locked (expect dave)';
 EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'gridtest',
-    @Filters = N'[{"column":"IsLocked","operator":"eq","value":"true"}]';
+    @Filters = N'[{"column":"Status","operator":"in","value":"Locked"}]';
 
 PRINT '--- 6. username contains an underscore (expect no rows: _ is a literal, not a wildcard)';
 EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'gridtest',
@@ -104,5 +104,20 @@ END TRY
 BEGIN CATCH
     PRINT '--- correctly denied: ' + ERROR_MESSAGE();
 END CATCH
+
+PRINT '--- 11. search Fin (expect alice and bob: no name matches, their group Finance does)';
+EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'Fin';
+
+PRINT '--- 12. group contains "Herp Team T" (expect carol)';
+EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'gridtest',
+    @Filters = N'[{"column":"GroupName","operator":"contains","value":"Herp Team T"}]';
+
+PRINT '--- 13. Status in Inactive (expect erin)';
+EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'gridtest',
+    @Filters = N'[{"column":"Status","operator":"in","value":"Inactive"}]';
+
+PRINT '--- 14. Status in Locked and Inactive (expect dave and erin)';
+EXEC security.spUser_Grid @ID_Session = @AdminSessionID, @Search = N'gridtest',
+    @Filters = N'[{"column":"Status","operator":"in","value":"Locked,Inactive"}]';
 
 ROLLBACK TRANSACTION;

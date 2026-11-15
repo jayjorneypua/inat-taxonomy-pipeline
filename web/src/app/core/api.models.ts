@@ -60,3 +60,40 @@ export interface ObservationsPageRequest {
   afterObservedDate?: string;
   afterObservationId?: number;
 }
+
+
+export interface GridFilter {
+  column: string;
+  operator: string;
+  value: string;
+}
+
+export interface UserGridRequest {
+  page: number;
+  pageSize: number;
+  search: string | null;
+  filters: GridFilter[];
+  sortColumn: string;
+  sortDirection: string;
+}
+
+export interface UserGridRow {
+  id: number;
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  active: boolean;
+  isLocked: boolean;
+  loginCount: number;
+  lastLoginDate: string | null;
+  groupNames: string | null;
+  roleNames: string | null;
+}
+
+export interface UserGridResponse {
+  items: UserGridRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}

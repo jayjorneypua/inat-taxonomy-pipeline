@@ -3,15 +3,22 @@
 --=====================================================================================================
 -- Purpose:  The admin users grid: offset paging, search, json filters and sorting, returning the page
 --           with TotalCount (every matching row, not just this page). Requires admin.users.manage.
+--           Search matches username, names, email, group names and role names.
+--           Status is Locked, Inactive or Active (in that order of priority), and the Status "in" filter
+--           takes a comma separated list, so the page can ask for any combination.
 --           Safe dynamic sql:
 --             - sort column and direction come from a whitelist, anything else is refused
 --             - each filter must match an allowed column and operator pair, which maps to a fixed
 --               piece of sql; the json only chooses from that list
 --             - filter and search values are passed to sp_executesql as parameters, never as text
 --             - LIKE wildcards (% _ [) in values are escaped, so a search for _ means a literal _
+--           WITH EXECUTE AS OWNER: ownership chaining doesn't cover dynamic sql, and the api login has
+--           no table access. Safe because the only variable sql text comes from the whitelists above.
 --           Only accounts that can log in are listed, so the System account never shows up.
 -- History:
 -- 2026-11-15  Jay Jorney Pua          Created the procedure.
+-- 2026-11-15  Jay Jorney Pua          WITH EXECUTE AS OWNER: ownership chaining doesn't cover dynamic sql.
+-- 2026-11-15  Jay Jorney Pua          Search matches groups and roles, contains filters, Status in filter.
 --=====================================================================================================
 CREATE PROCEDURE security.spUser_Grid
     @ID_Session             BIGINT
@@ -22,6 +29,7 @@ CREATE PROCEDURE security.spUser_Grid
   , @SortColumn             NVARCHAR(50)    = N'Username'
   , @SortDirection          NVARCHAR(4)     = N'asc'
   , @ClientIpAddress        VARCHAR(45)     = NULL
+WITH EXECUTE AS OWNER
 AS BEGIN
     SET NOCOUNT ON;
 
@@ -145,7 +153,7 @@ AS BEGIN
     END
 
     -- the value each operator compares with: wildcards added for contains and startswith,
-    -- after escaping the user's own wildcards
+    -- after escaping the user's own wildcards. eq and in use the value as it is
     UPDATE #filters
     SET
         ParameterValue =
@@ -183,10 +191,11 @@ AS BEGIN
       , (N'LastName',  N'eq',         N'user_rows.LastName = {value}')
       , (N'LastName',  N'contains',   N'user_rows.LastName LIKE {value}')
       , (N'LastName',  N'startswith', N'user_rows.LastName LIKE {value}')
-      , (N'Active',    N'eq',         N'user_rows.Active = TRY_CAST({value} AS BIT)')
-      , (N'IsLocked',  N'eq',         N'user_rows.IsLocked = TRY_CAST({value} AS BIT)')
+      , (N'Status',    N'in',         N'user_rows.Status IN (SELECT TRIM(status_values.value) FROM STRING_SPLIT({value}, N'','') status_values)')
       , (N'GroupName', N'eq',         N'EXISTS (SELECT 1 FROM security.User_Group memberships INNER JOIN security.[Group] member_groups ON memberships.ID_Group = member_groups.ID WHERE memberships.ID_User = user_rows.ID AND memberships.EndDate IS NULL AND member_groups.Name = {value})')
-      , (N'RoleName',  N'eq',         N'EXISTS (SELECT 1 FROM security.User_Role user_roles INNER JOIN security.Role roles ON user_roles.ID_Role = roles.ID WHERE user_roles.ID_User = user_rows.ID AND user_roles.EndDate IS NULL AND roles.Name = {value})');
+      , (N'GroupName', N'contains',   N'EXISTS (SELECT 1 FROM security.User_Group memberships INNER JOIN security.[Group] member_groups ON memberships.ID_Group = member_groups.ID WHERE memberships.ID_User = user_rows.ID AND memberships.EndDate IS NULL AND member_groups.Name LIKE {value})')
+      , (N'RoleName',  N'eq',         N'EXISTS (SELECT 1 FROM security.User_Role user_roles INNER JOIN security.Role roles ON user_roles.ID_Role = roles.ID WHERE user_roles.ID_User = user_rows.ID AND user_roles.EndDate IS NULL AND roles.Name = {value})')
+      , (N'RoleName',  N'contains',   N'EXISTS (SELECT 1 FROM security.User_Role user_roles INNER JOIN security.Role roles ON user_roles.ID_Role = roles.ID WHERE user_roles.ID_User = user_rows.ID AND user_roles.EndDate IS NULL AND roles.Name LIKE {value})');
 
     SELECT TOP (1)
         @InvalidFilter = CONCAT(requested_filters.ColumnName, N' ', requested_filters.Operator)
@@ -219,19 +228,16 @@ AS BEGIN
 
     SET @WhereClause = COALESCE(@WhereClause, N'');
 
-    SELECT
-        @FilterValue0 = MAX(CASE WHEN FilterNumber = 0 THEN ParameterValue END)
-      , @FilterValue1 = MAX(CASE WHEN FilterNumber = 1 THEN ParameterValue END)
-      , @FilterValue2 = MAX(CASE WHEN FilterNumber = 2 THEN ParameterValue END)
-      , @FilterValue3 = MAX(CASE WHEN FilterNumber = 3 THEN ParameterValue END)
-      , @FilterValue4 = MAX(CASE WHEN FilterNumber = 4 THEN ParameterValue END)
-      , @FilterValue5 = MAX(CASE WHEN FilterNumber = 5 THEN ParameterValue END)
-      , @FilterValue6 = MAX(CASE WHEN FilterNumber = 6 THEN ParameterValue END)
-      , @FilterValue7 = MAX(CASE WHEN FilterNumber = 7 THEN ParameterValue END)
-      , @FilterValue8 = MAX(CASE WHEN FilterNumber = 8 THEN ParameterValue END)
-      , @FilterValue9 = MAX(CASE WHEN FilterNumber = 9 THEN ParameterValue END)
-    FROM
-        #filters;
+    SET @FilterValue0 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 0);
+    SET @FilterValue1 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 1);
+    SET @FilterValue2 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 2);
+    SET @FilterValue3 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 3);
+    SET @FilterValue4 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 4);
+    SET @FilterValue5 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 5);
+    SET @FilterValue6 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 6);
+    SET @FilterValue7 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 7);
+    SET @FilterValue8 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 8);
+    SET @FilterValue9 = (SELECT ParameterValue FROM #filters WHERE FilterNumber = 9);
 
     ------------------------------------------------------------------------------------
     -- the query: every piece of text below is either constant or from a whitelist
@@ -248,6 +254,11 @@ WITH user_rows AS (
       , users.LoginCount
       , users.LastLoginDate
       , CAST(CASE WHEN users.LockedUntil > SYSUTCDATETIME() THEN 1 ELSE 0 END AS BIT) AS IsLocked
+      , CASE
+            WHEN users.LockedUntil > SYSUTCDATETIME() THEN N''Locked''
+            WHEN users.Active = 0 THEN N''Inactive''
+            ELSE N''Active''
+        END                                 AS Status
     FROM
         security.[User] users
     WHERE
@@ -298,6 +309,24 @@ WHERE
      OR user_rows.FirstName LIKE @SearchPattern
      OR user_rows.LastName LIKE @SearchPattern
      OR user_rows.Email LIKE @SearchPattern
+     OR EXISTS (
+            SELECT 1
+            FROM security.User_Group memberships
+            INNER JOIN security.[Group] member_groups
+                ON memberships.ID_Group = member_groups.ID
+            WHERE memberships.ID_User = user_rows.ID
+            AND memberships.EndDate IS NULL
+            AND member_groups.Name LIKE @SearchPattern
+        )
+     OR EXISTS (
+            SELECT 1
+            FROM security.User_Role user_roles
+            INNER JOIN security.Role roles
+                ON user_roles.ID_Role = roles.ID
+            WHERE user_roles.ID_User = user_rows.ID
+            AND user_roles.EndDate IS NULL
+            AND roles.Name LIKE @SearchPattern
+        )
     )' + @WhereClause + N'
 ORDER BY
     ' + @OrderByExpression + N' ' + @SortDirectionKeyword + N'
