@@ -1,5 +1,4 @@
--- run as inat_api. every forbidden action must be refused, every allowed procedure must run.
-USE inat;
+﻿-- run as inat_api. every forbidden action must be refused, every allowed procedure must run.
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 

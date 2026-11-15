@@ -229,3 +229,5 @@ logs/
 
 bin/
 obj/
+
+tests/sql/results/
