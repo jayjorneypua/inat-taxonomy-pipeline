@@ -94,8 +94,17 @@ if (isRedisEnabled)
 {
     // one shared redis connection, used by the cache and by the health check.
     // AbortOnConnectFail = false lets the API start even when redis is down; it keeps reconnecting in the background.
+    // FailFast: while disconnected, commands fail at once instead of waiting in a queue, so the cache falls
+    // through to memory and sql right away. the short timeouts cover a redis that is connected but slow.
+    int redisTimeoutMs = builder.Configuration.GetValue<int>("Redis:TimeoutMs", 500);
+
     ConfigurationOptions redisOptions = ConfigurationOptions.Parse(redisConnectionString ?? string.Empty);
     redisOptions.AbortOnConnectFail = false;
+    redisOptions.BacklogPolicy = BacklogPolicy.FailFast;
+    redisOptions.ConnectTimeout = redisTimeoutMs;
+    redisOptions.SyncTimeout = redisTimeoutMs;
+    redisOptions.AsyncTimeout = redisTimeoutMs;
+
     IConnectionMultiplexer redisConnection = ConnectionMultiplexer.Connect(redisOptions);
     builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
 
