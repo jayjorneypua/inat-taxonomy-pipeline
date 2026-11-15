@@ -10,6 +10,7 @@
 -- 2026-11-15  Jay Jorney Pua          Added spTaxonomy_TaxonPath.
 -- 2026-11-15  Jay Jorney Pua          Added spUser_Grid.
 -- 2026-11-15  Jay Jorney Pua          Added spSession_GetCurrentUser.
+-- 2026-11-15  Jay Jorney Pua          Added spSession_GetAccessContext.
 --=====================================================================================================
 CREATE ROLE [app_api] AUTHORIZATION [dbo];
 GO
@@ -26,6 +27,8 @@ GO
 GRANT EXECUTE ON OBJECT::security.spSession_Revoke              TO [app_api];
 GO
 GRANT EXECUTE ON OBJECT::security.spSession_GetCurrentUser      TO [app_api];
+GO
+GRANT EXECUTE ON OBJECT::security.spSession_GetAccessContext    TO [app_api];
 GO
 
 -- dashboard and taxonomy

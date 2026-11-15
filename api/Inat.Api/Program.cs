@@ -59,12 +59,17 @@ builder.Services
     });
 builder.Services.AddAuthorization();
 
+// caching: in memory for now, a distributed cache like redis can be added as a second level later
+builder.Services.AddHybridCache();
+
 // data access: one connection factory for the whole app, one repository per request
 builder.Services.AddSingleton<SqlConnectionFactory>();
 builder.Services.AddScoped<SecurityRepository>();
+builder.Services.AddScoped<AccessRepository>();
 builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<TaxonomyRepository>();
 builder.Services.AddScoped<AdminRepository>();
+builder.Services.AddScoped<QueryCache>();
 
 WebApplication app = builder.Build();
 

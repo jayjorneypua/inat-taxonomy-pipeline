@@ -9,8 +9,10 @@ namespace Inat.Api.Controllers;
 [ApiController]
 [Route("api/dashboard")]
 [Authorize]
-public sealed class DashboardController(DashboardRepository dashboardRepository) : ControllerBase
+public sealed class DashboardController(DashboardRepository dashboardRepository, QueryCache queryCache) : ControllerBase
 {
+    private const string DashboardViewPermission = "dashboard.view";
+
     [HttpPost("taxon-children")]
     public async Task<ActionResult<IReadOnlyList<TaxonChildCount>>> TaxonChildren(
         TaxonChildrenRequest request,
@@ -23,14 +25,20 @@ public sealed class DashboardController(DashboardRepository dashboardRepository)
         }
 
         string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        string queryArguments = request.ParentTaxonId?.ToString() ?? "root";
 
-        IReadOnlyList<TaxonChildCount> taxonChildCounts = await dashboardRepository.GetTaxonChildrenCountsAsync(
+        CachedResult<IReadOnlyList<TaxonChildCount>> cachedResult = await queryCache.GetOrLoadAsync(
             sessionId.Value,
-            request.ParentTaxonId,
+            DashboardViewPermission,
+            "taxon-children",
+            queryArguments,
             clientIpAddress,
+            (CancellationToken loadCancellationToken) => dashboardRepository.GetTaxonChildrenCountsAsync(
+                sessionId.Value, request.ParentTaxonId, clientIpAddress, loadCancellationToken),
             cancellationToken);
 
-        return Ok(taxonChildCounts);
+        SetCacheHeader(cachedResult.WasCached);
+        return Ok(cachedResult.Value);
     }
 
     [HttpPost("observations-by-month")]
@@ -45,13 +53,32 @@ public sealed class DashboardController(DashboardRepository dashboardRepository)
         }
 
         string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        string queryArguments = request.TaxonId?.ToString() ?? "root";
 
-        IReadOnlyList<ObservationMonthCount> monthCounts = await dashboardRepository.GetObservationsByMonthAsync(
+        CachedResult<IReadOnlyList<ObservationMonthCount>> cachedResult = await queryCache.GetOrLoadAsync(
             sessionId.Value,
-            request.TaxonId,
+            DashboardViewPermission,
+            "observations-by-month",
+            queryArguments,
             clientIpAddress,
+            (CancellationToken loadCancellationToken) => dashboardRepository.GetObservationsByMonthAsync(
+                sessionId.Value, request.TaxonId, clientIpAddress, loadCancellationToken),
             cancellationToken);
 
-        return Ok(monthCounts);
+        SetCacheHeader(cachedResult.WasCached);
+        return Ok(cachedResult.Value);
+    }
+
+    // X-Cache: hit or miss, so you can see the cache working in the browser's network tab
+    private void SetCacheHeader(bool wasCached)
+    {
+        if (wasCached)
+        {
+            Response.Headers["X-Cache"] = "hit";
+        }
+        else
+        {
+            Response.Headers["X-Cache"] = "miss";
+        }
     }
 }
