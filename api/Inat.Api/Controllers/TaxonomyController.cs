@@ -9,12 +9,14 @@ namespace Inat.Api.Controllers;
 [ApiController]
 [Route("api/taxonomy")]
 [Authorize]
-public sealed class TaxonomyController(TaxonomyRepository taxonomyRepository) : ControllerBase
+public sealed class TaxonomyController(TaxonomyRepository taxonomyRepository, QueryCache queryCache) : ControllerBase
 {
     private const int DefaultPageSize = 24;
     private const int MaximumPageSize = 100;
+    private const string TaxonomyViewPermission = "taxonomy.view";
 
-    // one page of the photo grid. the response's NextCursor goes into the next request, null means no more pages
+    // one page of the photo grid, not cached. the response's NextCursor goes into the next request,
+    // null means no more pages
     [HttpPost("observations")]
     public async Task<ActionResult<ObservationsPageResponse>> Observations(
         ObservationsPageRequest request,
@@ -55,7 +57,7 @@ public sealed class TaxonomyController(TaxonomyRepository taxonomyRepository) : 
         return Ok(new ObservationsPageResponse(observationCards, nextCursor));
     }
 
-    // the breadcrumb: every ancestor from the root down to the taxon. empty when out of scope or unknown
+    // the breadcrumb, cached: it only changes when the taxonomy changes, which is a new data version
     [HttpPost("path")]
     public async Task<ActionResult<IReadOnlyList<TaxonPathItem>>> Path(
         TaxonPathRequest request,
@@ -69,12 +71,25 @@ public sealed class TaxonomyController(TaxonomyRepository taxonomyRepository) : 
 
         string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
 
-        IReadOnlyList<TaxonPathItem> pathItems = await taxonomyRepository.GetTaxonPathAsync(
+        CachedResult<IReadOnlyList<TaxonPathItem>> cachedResult = await queryCache.GetOrLoadAsync(
             sessionId.Value,
-            request.TaxonId,
+            TaxonomyViewPermission,
+            "taxon-path",
+            request.TaxonId.ToString(),
             clientIpAddress,
+            (CancellationToken loadCancellationToken) => taxonomyRepository.GetTaxonPathAsync(
+                sessionId.Value, request.TaxonId, clientIpAddress, loadCancellationToken),
             cancellationToken);
 
-        return Ok(pathItems);
+        if (cachedResult.WasCached)
+        {
+            Response.Headers["X-Cache"] = "hit";
+        }
+        else
+        {
+            Response.Headers["X-Cache"] = "miss";
+        }
+
+        return Ok(cachedResult.Value);
     }
 }
