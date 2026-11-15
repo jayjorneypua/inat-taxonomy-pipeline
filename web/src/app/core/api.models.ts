@@ -1,10 +1,9 @@
 // shapes of what the api sends back. property names match the json, which is camelCase
 
+// the refresh token is not in here: it lives in an HttpOnly cookie that javascript cannot read
 export interface TokenResponse {
   accessToken: string;
   accessTokenExpiresAt: string;
-  refreshToken: string;
-  refreshTokenExpiresAt: string;
 }
 
 export interface TaxonChildCount {
