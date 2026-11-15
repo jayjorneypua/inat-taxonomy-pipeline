@@ -15,3 +15,48 @@ export interface TaxonChildCount {
   hasChildren: boolean;
   observationCount: number;
 }
+
+export interface TaxonPathItem {
+  id: number;
+  scientificName: string;
+  commonName: string | null;
+  rank: string;
+  level: number;
+}
+
+export interface ObservationMonthCount {
+  monthStart: string;
+  observationCount: number;
+}
+
+export interface ObservationCard {
+  observationId: number;
+  observationUuid: string;
+  observedDate: string;
+  taxonId: number;
+  scientificName: string;
+  commonName: string | null;
+  observerDisplayName: string;
+  photoCount: number;
+  squareUrl: string | null;
+  mediumUrl: string | null;
+  attribution: string | null;
+  license: string | null;
+}
+
+export interface ObservationCursor {
+  afterObservedDate: string;
+  afterObservationId: number;
+}
+
+export interface ObservationsPageResponse {
+  items: ObservationCard[];
+  nextCursor: ObservationCursor | null;
+}
+
+export interface ObservationsPageRequest {
+  taxonId: number;
+  pageSize: number;
+  afterObservedDate?: string;
+  afterObservationId?: number;
+}

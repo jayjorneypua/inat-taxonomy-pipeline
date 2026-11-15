@@ -54,4 +54,27 @@ public sealed class TaxonomyController(TaxonomyRepository taxonomyRepository) : 
 
         return Ok(new ObservationsPageResponse(observationCards, nextCursor));
     }
+
+    // the breadcrumb: every ancestor from the root down to the taxon. empty when out of scope or unknown
+    [HttpPost("path")]
+    public async Task<ActionResult<IReadOnlyList<TaxonPathItem>>> Path(
+        TaxonPathRequest request,
+        CancellationToken cancellationToken)
+    {
+        long? sessionId = TokenService.GetSessionId(User);
+        if (sessionId is null)
+        {
+            return Unauthorized();
+        }
+
+        string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        IReadOnlyList<TaxonPathItem> pathItems = await taxonomyRepository.GetTaxonPathAsync(
+            sessionId.Value,
+            request.TaxonId,
+            clientIpAddress,
+            cancellationToken);
+
+        return Ok(pathItems);
+    }
 }

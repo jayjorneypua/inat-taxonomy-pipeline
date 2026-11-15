@@ -7,6 +7,7 @@
 --           SQL projects need every GRANT in its own batch, hence a GO after each one.
 -- History:
 -- 2026-11-09  Jay Jorney Pua          Created the role and its grants.
+-- 2026-11-15  Jay Jorney Pua          Added spTaxonomy_TaxonPath.
 --=====================================================================================================
 CREATE ROLE [app_api] AUTHORIZATION [dbo];
 GO
@@ -29,4 +30,6 @@ GO
 GRANT EXECUTE ON OBJECT::dbo.spDashboard_ObservationsByMonth    TO [app_api];
 GO
 GRANT EXECUTE ON OBJECT::dbo.spTaxonomy_ObservationsPage        TO [app_api];
+GO
+GRANT EXECUTE ON OBJECT::dbo.spTaxonomy_TaxonPath               TO [app_api];
 GO
