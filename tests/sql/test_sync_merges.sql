@@ -1,6 +1,5 @@
--- tests the observer and taxon merges inside a transaction that is rolled back at the end.
+﻿-- tests the observer and taxon merges inside a transaction that is rolled back at the end.
 -- stage taxa are inserted children first on purpose, the merge must still insert parents first.
-USE inat;
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 

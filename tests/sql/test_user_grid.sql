@@ -1,4 +1,4 @@
--- tests the users grid inside a transaction that is rolled back at the end.
+﻿-- tests the users grid inside a transaction that is rolled back at the end.
 -- five test users whose usernames start with gridtest, so the real users don't affect the results:
 --   alice  Anders  Finance, Viewer
 --   bob    Baker   Finance, Analyst
@@ -6,7 +6,6 @@
 --   dave   Diaz    no group, locked
 --   erin   Evans   no group, inactive
 -- plus grid.admin (Administrator) to call the grid with
-USE inat;
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 

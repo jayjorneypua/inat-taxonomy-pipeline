@@ -1,6 +1,5 @@
--- tests the drill-down proc against the real serving data, inside a transaction rolled back at the end.
+﻿-- tests the drill-down proc against the real serving data, inside a transaction rolled back at the end.
 -- three users: one scoped to Amphibia with Viewer, one with Viewer but no scope, one with no role.
-USE inat;
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 

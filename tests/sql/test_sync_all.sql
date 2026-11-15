@@ -1,6 +1,5 @@
--- tests the full sync with a tiny dataset. Not wrapped in one transaction like the other tests,
+﻿-- tests the full sync with a tiny dataset. Not wrapped in one transaction like the other tests,
 -- because spMerge_All commits table by table. It cleans up after itself at the end instead.
-USE inat;
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 

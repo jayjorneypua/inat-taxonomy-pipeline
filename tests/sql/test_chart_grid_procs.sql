@@ -1,6 +1,5 @@
--- tests the monthly chart and the photo grid against the real serving data,
+﻿-- tests the monthly chart and the photo grid against the real serving data,
 -- inside a transaction rolled back at the end. One user scoped to Amphibia.
-USE inat;
 SET NOCOUNT ON;
 SET QUOTED_IDENTIFIER ON;
 
