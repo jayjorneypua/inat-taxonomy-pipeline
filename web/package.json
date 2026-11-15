@@ -6,7 +6,8 @@
     "start": "ng serve --proxy-config proxy.conf.json",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
-    "test": "ng test"
+    "test": "ng test",
+    "start:lb": "ng serve --proxy-config proxy.lb.conf.json"
   },
   "private": true,
   "packageManager": "npm@11.20.0",

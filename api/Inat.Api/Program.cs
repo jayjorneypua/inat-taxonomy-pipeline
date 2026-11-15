@@ -3,6 +3,7 @@ using Inat.Api.Data;
 using Inat.Api.Infrastructure;
 using Inat.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 
@@ -38,6 +39,20 @@ builder.Services.AddSingleton(tokenService);
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
+
+// behind nginx, RemoteIpAddress is nginx's address. nginx puts the real client address in X-Forwarded-For.
+// that header is only believed when the request comes from a trusted proxy: loopback is trusted by default,
+// extra networks come from ForwardedHeaders:TrustedNetworks. anyone else could fake their ip with that header.
+string[] trustedNetworks = builder.Configuration.GetSection("ForwardedHeaders:TrustedNetworks").Get<string[]>() ?? Array.Empty<string>();
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    foreach (string trustedNetwork in trustedNetworks)
+    {
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(trustedNetwork));
+    }
+});
 
 // one place that turns errors into 400, 401, 403 or a generic 500
 builder.Services.AddExceptionHandler<DatabaseExceptionHandler>();
@@ -106,12 +121,27 @@ else
     app.Logger.LogInformation("Cache: memory only (ConnectionStrings:Redis is empty)");
 }
 
-// first in the pipeline, so even error responses say which instance answered
+// first in the pipeline, so every controller already sees the real client address
+app.UseForwardedHeaders();
+
+// even error responses say which instance answered
 app.Use(async (HttpContext context, RequestDelegate next) =>
 {
     context.Response.Headers["X-Instance"] = instanceName;
     await next(context);
 });
+
+if (app.Environment.IsDevelopment())
+{
+    // development only: shows which client address the API ended up with, and the proxy address
+    // it replaced (X-Original-For is only there when the forwarded header was trusted)
+    app.Use(async (HttpContext context, RequestDelegate next) =>
+    {
+        context.Response.Headers["X-Client-Ip"] = context.Connection.RemoteIpAddress?.ToString() ?? "";
+        context.Response.Headers["X-Original-For"] = context.Request.Headers["X-Original-For"].ToString();
+        await next(context);
+    });
+}
 
 app.UseExceptionHandler();
 
