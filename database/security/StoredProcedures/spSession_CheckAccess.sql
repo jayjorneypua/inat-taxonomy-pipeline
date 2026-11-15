@@ -4,13 +4,16 @@
 -- Purpose:  The gate every dashboard procedure calls first. Passes silently when the session is
 --           valid and has the permission, and returns the user id. Otherwise logs AccessDenied
 --           and throws, so the calling procedure stops.
+--           Leave @PermissionCode null to only check that the session is valid (used by
+--           spSession_GetCurrentUser, which every logged in user may call).
 --           Callers run it before turning on XACT_ABORT, so a denial doesn't doom their transaction.
 -- History:
 -- 2026-11-08  Jay Jorney Pua          Created the procedure.
+-- 2026-11-15  Jay Jorney Pua          @PermissionCode is optional: null means any valid session.
 --=====================================================================================================
 CREATE PROCEDURE security.spSession_CheckAccess
     @ID_Session         BIGINT
-  , @PermissionCode     NVARCHAR(200)
+  , @PermissionCode     NVARCHAR(200)   = NULL
   , @ClientIpAddress    VARCHAR(45)     = NULL
   , @ID_User            INT             OUTPUT
 AS BEGIN
@@ -54,7 +57,8 @@ AS BEGIN
         THROW 50020, N'Access denied: the session is invalid, expired or revoked.', 1;
     END
 
-    IF NOT EXISTS (
+    IF @PermissionCode IS NOT NULL
+    AND NOT EXISTS (
         SELECT 1
         FROM security.Session_Permission session_permissions
         INNER JOIN security.Permission permissions

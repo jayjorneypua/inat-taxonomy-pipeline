@@ -6,11 +6,22 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 
-// helper mode: "dotnet run -- hash-password" prints a password hash for creating a user, then exits
+// helper mode: prints a password hash for creating a user, then exits.
+//   dotnet run -- hash-password              asks for the password without showing it
+//   dotnet run -- hash-password <password>   for scripts, with a known test password only
 if (args.Length > 0 && args[0] == "hash-password")
 {
-    Console.Error.Write("Password: ");
-    string password = ReadHiddenLine();
+    string password;
+    if (args.Length > 1)
+    {
+        password = args[1];
+    }
+    else
+    {
+        Console.Error.Write("Password: ");
+        password = ReadHiddenLine();
+    }
+
     PasswordHasher<object> passwordHasher = new PasswordHasher<object>();
     Console.WriteLine(passwordHasher.HashPassword(new object(), password));
     return;

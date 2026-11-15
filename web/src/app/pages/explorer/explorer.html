@@ -1,7 +1,7 @@
 <header class="top-bar">
   <a class="brand" routerLink="/explore">iNat Taxonomy</a>
   <nav class="top-links">
-    <a routerLink="/admin/users">Users</a>
+    <a routerLink="/admin/users" *appIfPermission="'admin.users.manage'">Users</a>
     <button type="button" (click)="logout()">Log out</button>
   </nav>
 </header>

@@ -127,4 +127,43 @@ public sealed class SecurityRepository(SqlConnectionFactory connectionFactory)
 
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    // two result sets: the user, then the session's permission codes
+    public async Task<CurrentUser> GetCurrentUserAsync(
+        long sessionId,
+        string? clientIpAddress,
+        CancellationToken cancellationToken)
+    {
+        await using SqlConnection connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using SqlCommand command = new SqlCommand("security.spSession_GetCurrentUser", connection);
+        command.CommandType = CommandType.StoredProcedure;
+
+        command.Parameters.Add("@ID_Session", SqlDbType.BigInt).Value = sessionId;
+        command.Parameters.Add("@ClientIpAddress", SqlDbType.VarChar, 45).Value = (object?)clientIpAddress ?? DBNull.Value;
+
+        await using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+
+        bool hasUser = await reader.ReadAsync(cancellationToken);
+        if (hasUser == false)
+        {
+            throw new InvalidOperationException("The session's user was not found.");
+        }
+
+        int userId = reader.GetInt32(reader.GetOrdinal("ID"));
+        string username = reader.GetString(reader.GetOrdinal("Username"));
+        string firstName = reader.GetString(reader.GetOrdinal("FirstName"));
+        string lastName = reader.GetString(reader.GetOrdinal("LastName"));
+
+        List<string> permissionCodes = new List<string>();
+
+        await reader.NextResultAsync(cancellationToken);
+        int permissionCodeOrdinal = reader.GetOrdinal("PermissionCode");
+
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            permissionCodes.Add(reader.GetString(permissionCodeOrdinal));
+        }
+
+        return new CurrentUser(userId, username, firstName, lastName, permissionCodes);
+    }
 }
