@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.IdentityModel.Tokens;
 using Inat.Api.Observability;
+using StackExchange.Redis;
 
 // helper mode: prints a password hash for creating a user, then exits.
 //   dotnet run -- hash-password              asks for the password without showing it
@@ -91,10 +92,17 @@ bool isRedisEnabled = string.IsNullOrWhiteSpace(redisConnectionString) == false;
 
 if (isRedisEnabled)
 {
+    // one shared redis connection, used by the cache and by the health check.
+    // AbortOnConnectFail = false lets the API start even when redis is down; it keeps reconnecting in the background.
+    ConfigurationOptions redisOptions = ConfigurationOptions.Parse(redisConnectionString ?? string.Empty);
+    redisOptions.AbortOnConnectFail = false;
+    IConnectionMultiplexer redisConnection = ConnectionMultiplexer.Connect(redisOptions);
+    builder.Services.AddSingleton<IConnectionMultiplexer>(redisConnection);
+
     // the database name is part of the prefix, so inat and inat_test_copy never share keys
     builder.Services.AddStackExchangeRedisCache(options =>
     {
-        options.Configuration = redisConnectionString;
+        options.ConnectionMultiplexerFactory = () => Task.FromResult(redisConnection);
         options.InstanceName = redisInstanceName;
     });
 }
@@ -109,6 +117,9 @@ builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<TaxonomyRepository>();
 builder.Services.AddScoped<AdminRepository>();
 builder.Services.AddScoped<QueryCache>();
+
+// /health/live and /health/ready
+builder.Services.AddInatHealthChecks(isRedisEnabled);
 
 WebApplication app = builder.Build();
 
@@ -157,6 +168,7 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapInatHealthChecks();
 
 app.Run();
 
