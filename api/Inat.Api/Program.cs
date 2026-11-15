@@ -1,23 +1,23 @@
-var builder = WebApplication.CreateBuilder(args);
+using Inat.Api.Data;
 
-// Add services to the container.
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-var app = builder.Build();
+// data access: one connection factory for the whole app, one repository per request
+builder.Services.AddSingleton<SqlConnectionFactory>();
+builder.Services.AddScoped<DashboardRepository>();
 
-// Configure the HTTP request pipeline.
+WebApplication app = builder.Build();
+
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
-
 app.UseAuthorization();
-
 app.MapControllers();
 
 app.Run();
