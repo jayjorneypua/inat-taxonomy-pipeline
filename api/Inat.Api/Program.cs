@@ -129,6 +129,7 @@ builder.Services.AddScoped<QueryCache>();
 
 // /health/live and /health/ready
 builder.Services.AddInatHealthChecks(isRedisEnabled);
+builder.Services.AddInatRateLimiting(builder.Configuration);
 
 WebApplication app = builder.Build();
 
@@ -166,6 +167,7 @@ if (app.Environment.IsDevelopment())
     });
 }
 
+app.UseRateLimiter();
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
