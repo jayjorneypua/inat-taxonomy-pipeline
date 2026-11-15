@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="Inat.Api.Tests/Inat.Api.Tests.csproj" />
   <Project Path="Inat.Api/Inat.Api.csproj" />
 </Solution>
