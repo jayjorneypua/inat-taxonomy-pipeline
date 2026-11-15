@@ -2,11 +2,14 @@
 --                                        sync spMerge_All
 --=====================================================================================================
 -- Purpose:  Runs every merge in foreign key order (Observer, Taxon, Photo, Observation, bridge)
---           as one logged run. Each table commits on its own to keep the log small. If one
---           fails, the run is marked Failed with the error; every merge is safe to rerun,
---           so the next run completes the job.
+--           as one logged run, then rebuilds the monthly counts. Each table commits on its own to
+--           keep the log small. If one fails, the run is marked Failed with the error; every step
+--           is safe to rerun, so the next run completes the job.
+--           The counts are rebuilt before the run is marked Succeeded: the API cache keys use the
+--           last succeeded run, so new keys only appear once the new counts are in place.
 -- History:
 -- 2026-11-08  Jay Jorney Pua          Created the procedure.
+-- 2026-11-15  Jay Jorney Pua          Rebuilds dbo.Taxon_MonthlyCount at the end of the run.
 --=====================================================================================================
 CREATE PROCEDURE sync.spMerge_All
     @IsFullExtract      BIT
@@ -24,6 +27,7 @@ AS BEGIN
         EXEC sync.spMerge_Photo            @ID_Run = @ID_Run, @IsFullExtract = @IsFullExtract;
         EXEC sync.spMerge_Observation      @ID_Run = @ID_Run, @IsFullExtract = @IsFullExtract;
         EXEC sync.spMerge_ObservationPhoto @ID_Run = @ID_Run, @IsFullExtract = @IsFullExtract;
+        EXEC sync.spTaxonMonthlyCount_Refresh;
 
         EXEC sync.spRun_Finish @ID_Run = @ID_Run, @Status = 'Succeeded';
     END TRY
