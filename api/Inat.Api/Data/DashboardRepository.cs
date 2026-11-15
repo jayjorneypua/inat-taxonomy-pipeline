@@ -34,10 +34,16 @@ public sealed class DashboardRepository(SqlConnectionFactory connectionFactory)
 
         while (await reader.ReadAsync(cancellationToken))
         {
+            string? commonName = null;
+            if (reader.IsDBNull(commonNameOrdinal) == false)
+            {
+                commonName = reader.GetString(commonNameOrdinal);
+            }
+
             taxonChildCounts.Add(new TaxonChildCount(
                 reader.GetInt32(idOrdinal),
                 reader.GetString(scientificNameOrdinal),
-                reader.IsDBNull(commonNameOrdinal) ? null : reader.GetString(commonNameOrdinal),
+                commonName,
                 reader.GetString(rankOrdinal),
                 reader.GetBoolean(hasChildrenOrdinal),
                 reader.GetInt32(observationCountOrdinal)));
