@@ -112,4 +112,20 @@ public sealed class AuthController(SecurityRepository securityRepository, TokenS
         await securityRepository.RevokeSessionAsync(sessionId.Value, "logout", clientIpAddress, cancellationToken);
         return NoContent();
     }
+
+    // who is logged in and what they may do, so the ui can show or hide pages and buttons
+    [HttpPost("me")]
+    [Authorize]
+    public async Task<ActionResult<CurrentUser>> Me(CancellationToken cancellationToken)
+    {
+        long? sessionId = TokenService.GetSessionId(User);
+        if (sessionId is null)
+        {
+            return Unauthorized();
+        }
+
+        string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        CurrentUser currentUser = await securityRepository.GetCurrentUserAsync(sessionId.Value, clientIpAddress, cancellationToken);
+        return Ok(currentUser);
+    }
 }

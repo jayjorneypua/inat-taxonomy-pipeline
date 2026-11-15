@@ -97,3 +97,11 @@ export interface UserGridResponse {
   page: number;
   pageSize: number;
 }
+
+export interface CurrentUser {
+  id: number;
+  username: string;
+  firstName: string;
+  lastName: string;
+  permissions: string[];
+}

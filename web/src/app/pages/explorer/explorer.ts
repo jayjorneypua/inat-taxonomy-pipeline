@@ -3,6 +3,7 @@ import { DatePipe, DecimalPipe } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
+import { IfPermissionDirective } from '../../core/if-permission.directive';
 import { TaxonomyApiService } from '../../core/taxonomy-api.service';
 import {
   ObservationCard,
@@ -19,7 +20,7 @@ const ROOT_TAXON_ID: number = 48460;
 // the taxon comes from the url, so every page can be bookmarked and the back button works
 @Component({
   selector: 'app-explorer',
-  imports: [RouterLink, DecimalPipe, DatePipe],
+  imports: [RouterLink, DecimalPipe, DatePipe, IfPermissionDirective],
   templateUrl: './explorer.html',
   styleUrl: './explorer.scss',
 })
@@ -157,7 +158,7 @@ export class Explorer {
       },
     });
 
-      this.taxonomyApi.getObservationsPage(taxonId, null).subscribe({
+    this.taxonomyApi.getObservationsPage(taxonId, null).subscribe({
       next: (page: ObservationsPageResponse): void => {
         if (this.taxonId() !== taxonId) {
           return;
