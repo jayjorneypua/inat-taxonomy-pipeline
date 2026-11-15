@@ -46,6 +46,26 @@ SELECT 'Observation' AS table_name, COUNT(*) AS row_count FROM dbo.Observation
 UNION ALL SELECT 'Photo', COUNT(*) FROM dbo.Photo
 UNION ALL SELECT 'Observation_Photo', COUNT(*) FROM dbo.Observation_Photo;
 
+PRINT '--- monthly counts after run 2 (expect one row: taxon 48460, 2025-06-01, count 1)';
+SELECT
+    monthly_counts.ID_Taxon
+  , monthly_counts.MonthStart
+  , monthly_counts.ObservationCount
+FROM
+    dbo.Taxon_MonthlyCount monthly_counts;
+
+IF (SELECT COUNT(*) FROM dbo.Taxon_MonthlyCount) <> 1
+OR NOT EXISTS (
+        SELECT 1
+        FROM dbo.Taxon_MonthlyCount monthly_counts
+        WHERE monthly_counts.ID_Taxon = 48460
+        AND monthly_counts.MonthStart = '2025-06-01'
+        AND monthly_counts.ObservationCount = 1
+    )
+BEGIN
+    THROW 50000, 'the sync did not rebuild dbo.Taxon_MonthlyCount correctly', 1;
+END
+
 PRINT '--- run log of the last 2 runs (expect run 1 all inserts, run 2: 1 photo and 1 observation deleted)';
 SELECT
     run_tables.ID_Run
@@ -65,6 +85,7 @@ ORDER BY
     run_tables.ID;
 
 -- clean up the test data, children before parents
+DELETE FROM dbo.Taxon_MonthlyCount;
 DELETE FROM dbo.Observation_Photo;
 DELETE FROM dbo.Observation;
 DELETE FROM dbo.Photo;
