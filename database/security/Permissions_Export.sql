@@ -9,3 +9,5 @@ GRANT EXECUTE ON OBJECT::dbo.spExport_Finish TO app_api;
 GO
 GRANT EXECUTE ON OBJECT::dbo.spExport_Get TO app_api;
 GO
+GRANT EXECUTE ON OBJECT::dbo.spExport_GetFile TO app_api;
+GO

@@ -48,16 +48,19 @@ public sealed class ExportRepository(SqlConnectionFactory connectionFactory)
             return null;
         }
 
+        int rowCountOrdinal = reader.GetOrdinal("ExportRowCount");
+        int finishedDateOrdinal = reader.GetOrdinal("FinishedDate");
+
         int? rowCount = null;
-        if (reader.IsDBNull(reader.GetOrdinal("ExportRowCount")) == false)
+        if (reader.IsDBNull(rowCountOrdinal) == false)
         {
-            rowCount = reader.GetInt32(reader.GetOrdinal("ExportRowCount"));
+            rowCount = reader.GetInt32(rowCountOrdinal);
         }
 
         DateTime? finishedDate = null;
-        if (reader.IsDBNull(reader.GetOrdinal("FinishedDate")) == false)
+        if (reader.IsDBNull(finishedDateOrdinal) == false)
         {
-            finishedDate = DateTime.SpecifyKind(reader.GetDateTime(reader.GetOrdinal("FinishedDate")), DateTimeKind.Utc);
+            finishedDate = DateTime.SpecifyKind(reader.GetDateTime(finishedDateOrdinal), DateTimeKind.Utc);
         }
 
         return new ExportJob(
@@ -69,6 +72,32 @@ public sealed class ExportRepository(SqlConnectionFactory connectionFactory)
             ReadNullableString(reader, reader.GetOrdinal("ErrorMessage")),
             DateTime.SpecifyKind(reader.GetDateTime(reader.GetOrdinal("CreatedDate")), DateTimeKind.Utc),
             finishedDate);
+    }
+
+    // the proc decides if the download is allowed; null means no
+    public async Task<ExportFile?> GetFileAsync(
+        long sessionId,
+        int exportJobId,
+        string? clientIpAddress,
+        CancellationToken cancellationToken)
+    {
+        await using SqlConnection connection = await connectionFactory.OpenAsync(cancellationToken);
+        await using SqlCommand command = new SqlCommand("dbo.spExport_GetFile", connection);
+        command.CommandType = CommandType.StoredProcedure;
+
+        command.Parameters.Add("@ID_Session", SqlDbType.BigInt).Value = sessionId;
+        command.Parameters.Add("@ID_Export_Job", SqlDbType.Int).Value = exportJobId;
+        command.Parameters.Add("@ClientIpAddress", SqlDbType.VarChar, 45).Value = (object?)clientIpAddress ?? DBNull.Value;
+
+        await using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken) == false)
+        {
+            return null;
+        }
+
+        return new ExportFile(
+            reader.GetString(reader.GetOrdinal("FileName")),
+            reader.GetString(reader.GetOrdinal("DownloadName")));
     }
 
     public async Task<ClaimedExport?> ClaimAsync(string claimedBy, CancellationToken cancellationToken)
@@ -92,10 +121,10 @@ public sealed class ExportRepository(SqlConnectionFactory connectionFactory)
     }
 
     // streams the rows straight into the writer, so a big export never sits in memory.
-    // the header comes from the procedure's column names. returns the number of data rows.
+    // the header comes from the procedure's column names, the row cap is the procedure's default.
+    // returns the number of data rows.
     public async Task<int> WriteRowsAsync(
         int exportJobId,
-        int maxRows,
         TextWriter writer,
         CancellationToken cancellationToken)
     {
@@ -105,7 +134,6 @@ public sealed class ExportRepository(SqlConnectionFactory connectionFactory)
         command.CommandTimeout = RowsCommandTimeoutSeconds;
 
         command.Parameters.Add("@ID_Export_Job", SqlDbType.Int).Value = exportJobId;
-        command.Parameters.Add("@MaxRows", SqlDbType.Int).Value = maxRows;
 
         await using SqlDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
 
@@ -135,10 +163,10 @@ public sealed class ExportRepository(SqlConnectionFactory connectionFactory)
 
     public async Task FinishAsync(
         int exportJobId,
+        string claimedBy,
         string status,
         int? exportRowCount,
         string? fileName,
-        string? errorMessage,
         CancellationToken cancellationToken)
     {
         await using SqlConnection connection = await connectionFactory.OpenAsync(cancellationToken);
@@ -146,10 +174,10 @@ public sealed class ExportRepository(SqlConnectionFactory connectionFactory)
         command.CommandType = CommandType.StoredProcedure;
 
         command.Parameters.Add("@ID_Export_Job", SqlDbType.Int).Value = exportJobId;
+        command.Parameters.Add("@ClaimedBy", SqlDbType.NVarChar, 100).Value = claimedBy;
         command.Parameters.Add("@Status", SqlDbType.VarChar, 20).Value = status;
         command.Parameters.Add("@ExportRowCount", SqlDbType.Int).Value = (object?)exportRowCount ?? DBNull.Value;
         command.Parameters.Add("@FileName", SqlDbType.NVarChar, 260).Value = (object?)fileName ?? DBNull.Value;
-        command.Parameters.Add("@ErrorMessage", SqlDbType.NVarChar, 4000).Value = (object?)errorMessage ?? DBNull.Value;
 
         await command.ExecuteNonQueryAsync(cancellationToken);
     }

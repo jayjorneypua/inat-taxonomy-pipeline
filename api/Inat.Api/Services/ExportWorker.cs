@@ -15,7 +15,6 @@ public sealed class ExportWorker(
     ILogger<ExportWorker> logger) : BackgroundService
 {
     private readonly string _folder = ExportSettings.GetFolder(configuration, environment);
-    private readonly int _maxRows = ExportSettings.GetMaxRows(configuration);
     private readonly TimeSpan _pollInterval = ExportSettings.GetPollInterval(configuration);
     private readonly string _instanceName = configuration["Instance:Name"] ?? $"{Environment.MachineName}-{Environment.ProcessId}";
 
@@ -82,14 +81,14 @@ public sealed class ExportWorker(
             {
                 await using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(true)))
                 {
-                    rowCount = await exportRepository.WriteRowsAsync(job.ExportJobId, _maxRows, writer, stoppingToken);
+                    rowCount = await exportRepository.WriteRowsAsync(job.ExportJobId, writer, stoppingToken);
                 }
             }
 
             // the file only gets its real name once complete, so a download never sees half a file
             File.Move(tempPath, finalPath, true);
 
-            await exportRepository.FinishAsync(job.ExportJobId, "Done", rowCount, fileName, null, stoppingToken);
+            await exportRepository.FinishAsync(job.ExportJobId, _instanceName, "Done", rowCount, fileName, stoppingToken);
             logger.LogInformation("Export {ExportJobId} done, {RowCount} rows", job.ExportJobId, rowCount);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
@@ -102,9 +101,8 @@ public sealed class ExportWorker(
             DeleteIfExists(tempPath);
             logger.LogError(ex, "Export {ExportJobId} failed", job.ExportJobId);
 
-            // the user sees a generic message, the details stay in the log
-            string errorMessage = $"Export failed. Ask an administrator to check the API log for export {job.ExportJobId}.";
-            await exportRepository.FinishAsync(job.ExportJobId, "Failed", null, null, errorMessage, CancellationToken.None);
+            // spExport_Finish writes the message the user sees
+            await exportRepository.FinishAsync(job.ExportJobId, _instanceName, "Failed", null, null, CancellationToken.None);
         }
     }
 

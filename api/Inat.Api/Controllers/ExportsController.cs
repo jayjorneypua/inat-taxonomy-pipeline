@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Inat.Api.Controllers;
 
 [ApiController]
-[Route("api/exports")]
+[Route("api/export")]
 [Authorize]
 public sealed class ExportsController(
     ExportRepository exportRepository,
@@ -16,7 +16,7 @@ public sealed class ExportsController(
     IHostEnvironment environment) : ControllerBase
 {
     // queues the export and answers right away with 202; the worker does the slow part
-    [HttpPost]
+    [HttpPost("create")]
     public async Task<ActionResult<ExportJobResponse>> Create(
         CreateExportRequest request,
         CancellationToken cancellationToken)
@@ -36,12 +36,14 @@ public sealed class ExportsController(
             return NotFound();
         }
 
-        return AcceptedAtAction(nameof(Get), new { id = exportJobId }, ToResponse(exportJob));
+        return Accepted(ToResponse(exportJob));
     }
 
     // the UI polls this until Status is Done or Failed
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<ExportJobResponse>> Get(int id, CancellationToken cancellationToken)
+    [HttpPost("status")]
+    public async Task<ActionResult<ExportJobResponse>> Status(
+        ExportStatusRequest request,
+        CancellationToken cancellationToken)
     {
         long? sessionId = TokenService.GetSessionId(User);
         if (sessionId is null)
@@ -51,7 +53,7 @@ public sealed class ExportsController(
 
         string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
 
-        ExportJob? exportJob = await exportRepository.GetAsync(sessionId.Value, id, clientIpAddress, cancellationToken);
+        ExportJob? exportJob = await exportRepository.GetAsync(sessionId.Value, request.ExportId, clientIpAddress, cancellationToken);
         if (exportJob is null)
         {
             return NotFound();
@@ -60,9 +62,11 @@ public sealed class ExportsController(
         return Ok(ToResponse(exportJob));
     }
 
-    // the finished file. only the user who asked for it gets it: spExport_Get filters on the user
-    [HttpGet("{id:int}/file")]
-    public async Task<IActionResult> File(int id, CancellationToken cancellationToken)
+    // the finished file. spExport_GetFile decides if this user may have it; no row means 404
+    [HttpPost("file")]
+    public async Task<IActionResult> File(
+        ExportStatusRequest request,
+        CancellationToken cancellationToken)
     {
         long? sessionId = TokenService.GetSessionId(User);
         if (sessionId is null)
@@ -72,25 +76,19 @@ public sealed class ExportsController(
 
         string? clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
 
-        ExportJob? exportJob = await exportRepository.GetAsync(sessionId.Value, id, clientIpAddress, cancellationToken);
-        if (exportJob is null)
+        ExportFile? exportFile = await exportRepository.GetFileAsync(sessionId.Value, request.ExportId, clientIpAddress, cancellationToken);
+        if (exportFile is null)
         {
             return NotFound();
         }
 
-        if (exportJob.Status != "Done" || string.IsNullOrEmpty(exportJob.FileName))
-        {
-            return Conflict(new { title = "The export is not finished", status = exportJob.Status });
-        }
-
-        string path = Path.Combine(ExportSettings.GetFolder(configuration, environment), exportJob.FileName);
+        string path = Path.Combine(ExportSettings.GetFolder(configuration, environment), exportFile.FileName);
         if (System.IO.File.Exists(path) == false)
         {
             return NotFound();
         }
 
-        string downloadName = $"observations-taxon-{exportJob.TaxonId}-export-{exportJob.Id}.csv";
-        return PhysicalFile(path, "text/csv", downloadName);
+        return PhysicalFile(path, "text/csv", exportFile.DownloadName);
     }
 
     private static ExportJobResponse ToResponse(ExportJob exportJob)

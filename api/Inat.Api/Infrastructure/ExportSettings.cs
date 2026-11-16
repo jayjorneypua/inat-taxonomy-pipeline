@@ -1,6 +1,7 @@
 namespace Inat.Api.Infrastructure;
 
-// export settings in one place, so the worker and the controller agree on the folder
+// where export files live and how often the worker looks for jobs.
+// what goes into an export, and how many rows, is decided by the procedures.
 public static class ExportSettings
 {
     public static string GetFolder(IConfiguration configuration, IHostEnvironment environment)
@@ -12,11 +13,6 @@ public static class ExportSettings
         }
 
         return configuredFolder;
-    }
-
-    public static int GetMaxRows(IConfiguration configuration)
-    {
-        return configuration.GetValue<int>("Export:MaxRows", 100000);
     }
 
     public static TimeSpan GetPollInterval(IConfiguration configuration)

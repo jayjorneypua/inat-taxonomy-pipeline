@@ -1,4 +1,4 @@
---=====================================================================================================
+﻿--=====================================================================================================
 --                                        Post Deployment Seed Data
 --=====================================================================================================
 -- Purpose:  Runs after every publish. Every insert checks first, so reruns never duplicate.
@@ -6,6 +6,7 @@
 -- 2026-11-08  Jay Jorney Pua          System user and group types.
 -- 2026-11-08  Jay Jorney Pua          Resource types and roles.
 -- 2026-11-08  Jay Jorney Pua          App resources, permissions and what each role can do.
+-- 2026-11-16  Jay Jorney Pua          Export statuses.
 --=====================================================================================================
 
 ------------------------------------------------------------------------------------
@@ -267,4 +268,32 @@ WHERE
         FROM security.Role_Permission existing_grants
         WHERE existing_grants.ID_Role = roles.ID
         AND existing_grants.ID_Permission = permissions.ID
+    );
+
+------------------------------------------------------------------------------------
+-- Export statuses
+------------------------------------------------------------------------------------
+INSERT INTO dbo.ExportStatus (
+    Name
+  , Description
+  , DisplayOrder
+  , ID_CreatedBy
+)
+SELECT
+    seed_statuses.Name
+  , seed_statuses.Description
+  , seed_statuses.DisplayOrder
+  , 1
+FROM (
+    VALUES
+        (N'Queued',  N'Waiting for a worker to pick it up',          1)
+      , (N'Running', N'A worker is writing the file',                2)
+      , (N'Done',    N'The file is ready to download',               3)
+      , (N'Failed',  N'The export stopped, see the API log',         4)
+) seed_statuses (Name, Description, DisplayOrder)
+WHERE
+    NOT EXISTS (
+        SELECT 1
+        FROM dbo.ExportStatus existing_statuses
+        WHERE existing_statuses.Name = seed_statuses.Name
     );
