@@ -234,3 +234,4 @@ tests/sql/results/
 
 .vscode/
 tools/k6/report.html
+api/Inat.Api/exports/

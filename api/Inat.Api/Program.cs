@@ -126,6 +126,8 @@ builder.Services.AddScoped<DashboardRepository>();
 builder.Services.AddScoped<TaxonomyRepository>();
 builder.Services.AddScoped<AdminRepository>();
 builder.Services.AddScoped<QueryCache>();
+builder.Services.AddScoped<ExportRepository>();
+builder.Services.AddHostedService<ExportWorker>();
 
 // /health/live and /health/ready
 builder.Services.AddInatHealthChecks(isRedisEnabled);
