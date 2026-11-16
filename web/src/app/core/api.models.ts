@@ -104,3 +104,13 @@ export interface CurrentUser {
   lastName: string;
   permissions: string[];
 }
+
+export interface ExportJob {
+  id: number;
+  taxonId: number;
+  status: string;
+  rowCount: number | null;
+  errorMessage: string | null;
+  createdDate: string;
+  finishedDate: string | null;
+}

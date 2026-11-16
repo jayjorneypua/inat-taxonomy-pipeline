@@ -26,6 +26,23 @@
     <section class="taxon-header">
       <h1>{{ taxon.commonName ?? taxon.scientificName }}</h1>
       <p class="subtitle"><em>{{ taxon.scientificName }}</em> · {{ taxon.rank }}</p>
+
+      <!-- only users with observations.export see this; the procedures check the permission again -->
+      <div class="export-actions" *appIfPermission="'observations.export'">
+        <button type="button" (click)="exportObservations()" [disabled]="isExporting()">
+          @if (isExporting()) {
+            Exporting...
+          } @else {
+            Export CSV
+          }
+        </button>
+        @if (exportMessage(); as message) {
+          <span class="muted">{{ message }}</span>
+        }
+        @if (exportError(); as message) {
+          <span class="error">{{ message }}</span>
+        }
+      </div>
     </section>
   }
 
