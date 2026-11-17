@@ -1,4 +1,6 @@
 import argparse
+import faulthandler
+import os
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -15,6 +17,8 @@ SQL_SERVER_CONNECTION = (
 )
 BATCH_SIZE = 50_000
 WATERMARK_OVERLAP = timedelta(hours=1)
+# if no rows arrive from databricks for this long, the fetch counts as stalled and the sync exits with an error
+STALL_TIMEOUT_SECONDS = int(os.environ.get("SYNC_STALL_TIMEOUT_SECONDS", "600"))
 
 INT = (pyodbc.SQL_INTEGER, 0, 0)
 BIGINT = (pyodbc.SQL_BIGINT, 0, 0)
@@ -149,6 +153,12 @@ TABLES = [
 ]
 
 
+def arm_stall_watchdog():
+    # restarts the countdown; when it runs out, python prints where it was stuck and exits with code 1
+    faulthandler.cancel_dump_traceback_later()
+    faulthandler.dump_traceback_later(STALL_TIMEOUT_SECONDS, exit=True)
+
+
 def to_sql_value(value):
     # sql server datetime2 has no time zone, store everything as utc
     if isinstance(value, datetime) and value.tzinfo is not None:
@@ -220,6 +230,7 @@ def load_table(table, databricks_connection, sql_server_connection, extract_wind
     start_time = time.time()
 
     with databricks_connection.cursor() as databricks_cursor:
+        arm_stall_watchdog()
         databricks_cursor.execute(query, query_parameters)
 
         while True:
@@ -233,6 +244,7 @@ def load_table(table, databricks_connection, sql_server_connection, extract_wind
             sql_server_connection.commit()
 
             rows_loaded += len(rows)
+            arm_stall_watchdog()
             elapsed_seconds = time.time() - start_time
             print(
                 f"{datetime.now():%H:%M:%S}  {table['stage_table']}: {rows_loaded:,} rows"
@@ -287,6 +299,7 @@ def run_merge(sql_server_connection, is_full_extract):
 def sync_gold(force_full_extract):
     sync_start_time = time.time()
 
+    arm_stall_watchdog()
     with connect_databricks() as databricks_connection:
         sql_server_connection = pyodbc.connect(SQL_SERVER_CONNECTION, autocommit=False)
         try:
@@ -321,6 +334,8 @@ def sync_gold(force_full_extract):
                     }
                 load_table(table, databricks_connection, sql_server_connection, extract_window)
 
+            # the merge runs locally in sql server, no databricks fetch to watch
+            faulthandler.cancel_dump_traceback_later()
             print(f"{datetime.now():%H:%M:%S}  merging stage into the serving tables...")
             # the merge procedures manage their own transactions
             sql_server_connection.autocommit = True
