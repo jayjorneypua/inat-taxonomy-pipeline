@@ -12,13 +12,15 @@
 --               piece of sql; the json only chooses from that list
 --             - filter and search values are passed to sp_executesql as parameters, never as text
 --             - LIKE wildcards (% _ [) in values are escaped, so a search for _ means a literal _
---           WITH EXECUTE AS OWNER: ownership chaining doesn't cover dynamic sql, and the api login has
---           no table access. Safe because the only variable sql text comes from the whitelists above.
+--           Signed with the ProcSigning certificate (see PostDeployment.sql): ownership chaining doesn't
+--           cover dynamic sql, and the api login has no table access. The certificate's user may only read
+--           the five security tables the query uses, and the only variable sql text comes from the whitelists above.
 --           Only accounts that can log in are listed, so the System account never shows up.
 -- History:
 -- 2026-11-15  Jay Jorney Pua          Created the procedure.
 -- 2026-11-15  Jay Jorney Pua          WITH EXECUTE AS OWNER: ownership chaining doesn't cover dynamic sql.
 -- 2026-11-15  Jay Jorney Pua          Search matches groups and roles, contains filters, Status in filter.
+-- 2026-11-17  Jay Jorney Pua          Certificate signing instead of WITH EXECUTE AS OWNER.
 --=====================================================================================================
 CREATE PROCEDURE security.spUser_Grid
     @ID_Session             BIGINT
@@ -29,7 +31,6 @@ CREATE PROCEDURE security.spUser_Grid
   , @SortColumn             NVARCHAR(50)    = N'Username'
   , @SortDirection          NVARCHAR(4)     = N'asc'
   , @ClientIpAddress        VARCHAR(45)     = NULL
-WITH EXECUTE AS OWNER
 AS BEGIN
     SET NOCOUNT ON;
 
