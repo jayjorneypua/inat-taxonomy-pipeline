@@ -49,6 +49,9 @@ TABLES = [
     },
     {
         "stage_table": "stage.Taxon",
+        "gold_table": "inat.gold.dim_taxon",
+        # dbt stamps changed taxa in one statement at run time, so no late rows: no overlap
+        "watermark_overlap": timedelta(0),
         "columns": [
             "ID", "ID_Parent", "ScientificName", "CommonName", "Rank", "RankLevel",
             "Path", "Level", "HasChildren", "Active", "IsInTree", "SnapshotDate",
@@ -313,7 +316,7 @@ def sync_gold(force_full_extract):
                 gold_table = table.get("gold_table")
                 if not is_full_extract and gold_table in new_watermarks:
                     extract_window = {
-                        "watermark_from": as_utc(stored_watermarks[gold_table]) - WATERMARK_OVERLAP,
+                        "watermark_from": as_utc(stored_watermarks[gold_table]) - table.get("watermark_overlap", WATERMARK_OVERLAP),
                         "watermark_to": new_watermarks[gold_table],
                     }
                 load_table(table, databricks_connection, sql_server_connection, extract_window)
