@@ -1,0 +1,51 @@
+# builds and tests everything that does not need a live sql server, redis or databricks.
+# the sql, integration and playwright tests run locally with tools\run_tests.ps1 and tools\run_ui_tests.ps1
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  api:
+    name: api build and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: build
+        run: dotnet build api/Inat.slnx --configuration Release
+      - name: unit tests (integration tests need sql server and run locally)
+        run: dotnet test api/Inat.slnx --configuration Release --no-build --filter "FullyQualifiedName!~IntegrationTests"
+
+  database:
+    name: database project build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: build the dacpac
+        run: dotnet build database/inat.sqlproj --configuration Release
+
+  web:
+    name: angular build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: install
+        run: npm ci
+      - name: build
+        run: npx ng build
