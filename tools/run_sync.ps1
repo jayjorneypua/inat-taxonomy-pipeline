@@ -2,7 +2,7 @@
 # made for the windows scheduled task from register_sync_task.ps1, but can be run by hand.
 # it syncs only when the latest finished databricks run succeeded and ended after the last succeeded sync started.
 # on sundays it does a full extract, so rows deleted in gold are deleted here too.
-# every run writes a log to logs\sync, the newest 30 are kept.
+# every line, python output included, is written to logs\sync as it happens. the newest 30 logs are kept.
 # usage, from the repo root:
 #   .\tools\run_sync.ps1           sync if there is a new succeeded run
 #   .\tools\run_sync.ps1 -Force    sync even without a new run
@@ -20,8 +20,17 @@ param(
 [string]$jobName = "inat_taxonomy_pipeline"
 [int]$logsToKeep = 30
 
+New-Item -ItemType Directory -Force -Path $logFolder | Out-Null
+[string]$logPath = Join-Path $logFolder "sync_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+
+# one line to the screen and to the log file, written at once so a killed run still leaves its log
+function Write-LogLine([string]$line) {
+    Write-Host $line
+    Add-Content -Path $logPath -Value $line -Encoding utf8
+}
+
 function Write-Log([string]$message) {
-    Write-Host "$(Get-Date -Format 'HH:mm:ss')  $message"
+    Write-LogLine "$(Get-Date -Format 'HH:mm:ss')  $message"
 }
 
 # the start of the last succeeded sync in utc, or $null if there was none
@@ -70,12 +79,9 @@ function Get-LatestJobRun {
     }
 }
 
-New-Item -ItemType Directory -Force -Path $logFolder | Out-Null
-[string]$logPath = Join-Path $logFolder "sync_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
-Start-Transcript -Path $logPath | Out-Null
-
 [int]$exitCode = 0
 try {
+    Write-Log "sync check started"
     [object]$latestRun = Get-LatestJobRun
     [object]$lastSyncStart = Get-LastSyncStart
 
@@ -109,8 +115,8 @@ try {
             Write-Log "full extract"
         }
 
-        # piped through the host so the transcript captures the python output too
-        & $pythonPath @syncArguments 2>&1 | Out-Host
+        # every python line, errors included, goes through Write-LogLine as it arrives
+        & $pythonPath @syncArguments 2>&1 | ForEach-Object { Write-LogLine "$_" }
         if ($LASTEXITCODE -ne 0) {
             Write-Log "sync failed with exit code $LASTEXITCODE"
             $exitCode = 1
@@ -125,7 +131,6 @@ catch {
     $exitCode = 1
 }
 finally {
-    Stop-Transcript | Out-Null
     Get-ChildItem $logFolder -Filter "sync_*.log" | Sort-Object Name -Descending | Select-Object -Skip $logsToKeep | Remove-Item
 }
 
