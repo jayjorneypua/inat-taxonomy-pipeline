@@ -7,12 +7,13 @@
 --              (self included), so STRING_SPLIT on Path gives every taxon the count belongs to
 --           3. swaps the result in with TRUNCATE + INSERT in one short transaction
 --           Taxa without a Path (not in the tree) are left out, same as the live query did.
---           EXECUTE AS OWNER because TRUNCATE needs ALTER on the table.
+--           Signed with the ProcSigning certificate (see PostDeployment.sql), whose user may only ALTER
+--           dbo.Taxon_MonthlyCount: TRUNCATE needs ALTER, and ownership chaining doesn't give it.
 -- History:
 -- 2026-11-15  Jay Jorney Pua          Created the procedure.
+-- 2026-11-17  Jay Jorney Pua          Certificate signing instead of WITH EXECUTE AS OWNER.
 --=====================================================================================================
 CREATE PROCEDURE sync.spTaxonMonthlyCount_Refresh
-WITH EXECUTE AS OWNER
 AS BEGIN
     SET NOCOUNT ON;
 

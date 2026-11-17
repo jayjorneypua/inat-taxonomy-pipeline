@@ -21,6 +21,11 @@ internal static class TestDatabase
     private const string AdminConnectionString =
         "Server=.;Database=inat_test_empty;Integrated Security=True;Encrypt=True;TrustServerCertificate=True";
 
+    // test classes run in parallel and each seeds in its ClassInitialize. without this lock two classes
+    // could insert the same user at the same moment and one would fail on UQ_User_Username
+    private static readonly SemaphoreSlim SeedLock = new SemaphoreSlim(1, 1);
+    private static bool isSeeded = false;
+
     // same login and permissions as the real api, only the database differs
     public static IConfiguration CreateApiConfiguration()
     {
@@ -43,21 +48,38 @@ internal static class TestDatabase
         return new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
     }
 
-    // creates the inat_api user in the test database and the test data, skipping whatever already exists
+    // creates the inat_api user in the test database and the test data, once per test run;
+    // the sql also skips whatever already exists, so a rerun on the same database is safe
     public static async Task SeedAsync()
     {
-        PasswordHasher<object> passwordHasher = new PasswordHasher<object>();
+        await SeedLock.WaitAsync();
 
-        await using SqlConnection connection = new SqlConnection(AdminConnectionString);
-        await connection.OpenAsync();
+        try
+        {
+            if (isSeeded)
+            {
+                return;
+            }
 
-        await using SqlCommand command = new SqlCommand(SeedSql, connection);
-        command.Parameters.AddWithValue("@AdminUsername", AdminUsername);
-        command.Parameters.AddWithValue("@ViewerUsername", ViewerUsername);
-        command.Parameters.AddWithValue("@AdminPasswordHash", passwordHasher.HashPassword(new object(), AdminPassword));
-        command.Parameters.AddWithValue("@ViewerPasswordHash", passwordHasher.HashPassword(new object(), ViewerPassword));
+            PasswordHasher<object> passwordHasher = new PasswordHasher<object>();
 
-        await command.ExecuteNonQueryAsync();
+            await using SqlConnection connection = new SqlConnection(AdminConnectionString);
+            await connection.OpenAsync();
+
+            await using SqlCommand command = new SqlCommand(SeedSql, connection);
+            command.Parameters.AddWithValue("@AdminUsername", AdminUsername);
+            command.Parameters.AddWithValue("@ViewerUsername", ViewerUsername);
+            command.Parameters.AddWithValue("@AdminPasswordHash", passwordHasher.HashPassword(new object(), AdminPassword));
+            command.Parameters.AddWithValue("@ViewerPasswordHash", passwordHasher.HashPassword(new object(), ViewerPassword));
+
+            await command.ExecuteNonQueryAsync();
+
+            isSeeded = true;
+        }
+        finally
+        {
+            SeedLock.Release();
+        }
     }
 
     // a tiny world: Life > Animalia > Amphibia, and Plantae. 3 amphibian observations with photos,

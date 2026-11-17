@@ -1,4 +1,4 @@
-﻿--=====================================================================================================
+--=====================================================================================================
 --                                        Post Deployment Seed Data
 --=====================================================================================================
 -- Purpose:  Runs after every publish. Every insert checks first, so reruns never duplicate.
@@ -7,6 +7,7 @@
 -- 2026-11-08  Jay Jorney Pua          Resource types and roles.
 -- 2026-11-08  Jay Jorney Pua          App resources, permissions and what each role can do.
 -- 2026-11-16  Jay Jorney Pua          Export statuses.
+-- 2026-11-17  Jay Jorney Pua          Certificate signing for spUser_Grid and spTaxonMonthlyCount_Refresh.
 --=====================================================================================================
 
 ------------------------------------------------------------------------------------
@@ -297,3 +298,69 @@ WHERE
         FROM dbo.ExportStatus existing_statuses
         WHERE existing_statuses.Name = seed_statuses.Name
     );
+
+------------------------------------------------------------------------------------
+-- Procedure signing, instead of WITH EXECUTE AS OWNER
+-- Procedures that need a right ownership chaining doesn't give are signed with the ProcSigning
+-- certificate, and the certificate's user holds only those rights. A publish that changes a
+-- signed procedure drops its signature, so every publish rebuilds the certificate with a random
+-- password, signs, then removes the private key: no secret is stored, and nothing else can be
+-- signed with it afterwards.
+------------------------------------------------------------------------------------
+DECLARE @SigningPassword    NVARCHAR(100) = CONCAT(NEWID(), N'-', NEWID());
+DECLARE @SigningSql         NVARCHAR(MAX);
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.crypt_properties signatures
+    INNER JOIN sys.certificates certificates
+        ON signatures.thumbprint = certificates.thumbprint
+    WHERE certificates.name = N'ProcSigning'
+    AND signatures.major_id = OBJECT_ID(N'security.spUser_Grid')
+) BEGIN
+    DROP SIGNATURE FROM security.spUser_Grid BY CERTIFICATE ProcSigning;
+END
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.crypt_properties signatures
+    INNER JOIN sys.certificates certificates
+        ON signatures.thumbprint = certificates.thumbprint
+    WHERE certificates.name = N'ProcSigning'
+    AND signatures.major_id = OBJECT_ID(N'sync.spTaxonMonthlyCount_Refresh')
+) BEGIN
+    DROP SIGNATURE FROM sync.spTaxonMonthlyCount_Refresh BY CERTIFICATE ProcSigning;
+END
+
+IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'ProcSigningUser') BEGIN
+    DROP USER ProcSigningUser;
+END
+
+IF EXISTS (SELECT 1 FROM sys.certificates WHERE name = N'ProcSigning') BEGIN
+    DROP CERTIFICATE ProcSigning;
+END
+
+SET @SigningSql =
+    N'CREATE CERTIFICATE ProcSigning ENCRYPTION BY PASSWORD = ' + QUOTENAME(@SigningPassword, N'''')
+  + N' WITH SUBJECT = N''Signs procedures that need rights ownership chaining does not give'''
+  + N', EXPIRY_DATE = ''2099-12-31'';';
+EXEC sys.sp_executesql @SigningSql;
+
+CREATE USER ProcSigningUser FROM CERTIFICATE ProcSigning;
+
+-- spUser_Grid: its dynamic sql reads these five tables
+GRANT SELECT ON OBJECT::security.[User]         TO ProcSigningUser;
+GRANT SELECT ON OBJECT::security.User_Group     TO ProcSigningUser;
+GRANT SELECT ON OBJECT::security.[Group]        TO ProcSigningUser;
+GRANT SELECT ON OBJECT::security.User_Role      TO ProcSigningUser;
+GRANT SELECT ON OBJECT::security.Role           TO ProcSigningUser;
+
+-- spTaxonMonthlyCount_Refresh: TRUNCATE needs ALTER
+GRANT ALTER ON OBJECT::dbo.Taxon_MonthlyCount   TO ProcSigningUser;
+
+SET @SigningSql =
+    N'ADD SIGNATURE TO security.spUser_Grid BY CERTIFICATE ProcSigning WITH PASSWORD = ' + QUOTENAME(@SigningPassword, N'''') + N';'
+  + N'ADD SIGNATURE TO sync.spTaxonMonthlyCount_Refresh BY CERTIFICATE ProcSigning WITH PASSWORD = ' + QUOTENAME(@SigningPassword, N'''') + N';';
+EXEC sys.sp_executesql @SigningSql;
+
+ALTER CERTIFICATE ProcSigning REMOVE PRIVATE KEY;
