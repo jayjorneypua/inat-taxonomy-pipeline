@@ -1,8 +1,18 @@
-resources:
+﻿resources:
   jobs:
     inat_taxonomy_pipeline:
       name: inat_taxonomy_pipeline
       max_concurrent_runs: 1
+
+      # every day at 02:00 manila time; the local sync picks it up at 06:00
+      schedule:
+        quartz_cron_expression: "0 0 2 * * ?"
+        timezone_id: Asia/Manila
+        pause_status: UNPAUSED
+
+      email_notifications:
+        on_failure:
+          - jayjorneypua@gmail.com
 
       permissions:
         - level: CAN_MANAGE
