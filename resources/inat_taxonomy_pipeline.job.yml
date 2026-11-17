@@ -1,4 +1,4 @@
-﻿resources:
+resources:
   jobs:
     inat_taxonomy_pipeline:
       name: inat_taxonomy_pipeline
@@ -17,6 +17,8 @@
       permissions:
         - level: CAN_MANAGE
           user_name: jayjorneypua@gmail.com
+        - level: CAN_VIEW
+          service_principal_name: 98de3bcb-a508-4f97-adab-91580e4aaed7
 
       environments:
         - environment_key: dbt-default

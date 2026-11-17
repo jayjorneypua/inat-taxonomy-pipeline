@@ -8,7 +8,8 @@ import pyodbc
 from databricks import sql as databricks_sql
 from databricks.sdk.core import Config
 
-DATABRICKS_PROFILE = "dbc-609647e1-c073"
+# the service principal inat-taxonomy-pipeline-sp, so the nightly sync does not depend on a personal login
+DATABRICKS_PROFILE = "inat-sp"
 DATABRICKS_HTTP_PATH = "/sql/1.0/warehouses/606b0c60dc21c8fd"
 SQL_SERVER_CONNECTION = (
     "Driver={ODBC Driver 18 for SQL Server};"
