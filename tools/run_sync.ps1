@@ -1,4 +1,4 @@
-﻿# runs the local sync (databricks gold -> sql server) when there is something new to sync.
+# runs the local sync (databricks gold -> sql server) when there is something new to sync.
 # made for the windows scheduled task from register_sync_task.ps1, but can be run by hand.
 # it syncs only when the latest finished databricks run succeeded and ended after the last succeeded sync started.
 # on sundays it does a full extract, so rows deleted in gold are deleted here too.
@@ -16,7 +16,8 @@ param(
 [string]$pythonPath = Join-Path $repositoryRoot ".venv\Scripts\python.exe"
 [string]$syncScript = Join-Path $repositoryRoot "sync\sync_gold.py"
 [string]$logFolder = Join-Path $repositoryRoot "logs\sync"
-[string]$databricksProfile = "dbc-609647e1-c073"
+# the service principal inat-taxonomy-pipeline-sp, see .databrickscfg
+[string]$databricksProfile = "inat-sp"
 [string]$jobName = "inat_taxonomy_pipeline"
 [int]$logsToKeep = 30
 
@@ -52,7 +53,7 @@ function Get-LastSyncStart {
 function Get-LatestJobRun {
     [string[]]$jobsOutput = & databricks jobs list --name $jobName -o json -p $databricksProfile
     if ($LASTEXITCODE -ne 0) {
-        throw "listing databricks jobs failed. if the login expired, run: databricks auth login --profile $databricksProfile"
+        throw "listing databricks jobs failed. check the $databricksProfile profile in .databrickscfg, its client secret expires after 730 days"
     }
 
     [object[]]$jobs = @(($jobsOutput -join "`n") | ConvertFrom-Json)
