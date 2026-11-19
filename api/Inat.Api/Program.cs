@@ -128,6 +128,7 @@ builder.Services.AddScoped<AdminRepository>();
 builder.Services.AddScoped<QueryCache>();
 builder.Services.AddScoped<ExportRepository>();
 builder.Services.AddHostedService<ExportWorker>();
+builder.Services.AddHostedService<CacheWarmer>();
 
 // /health/live and /health/ready
 builder.Services.AddInatHealthChecks(isRedisEnabled);
