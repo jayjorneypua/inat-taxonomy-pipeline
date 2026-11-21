@@ -3,7 +3,22 @@ bundle:
 
 workspace:
   host: https://dbc-609647e1-c073.cloud.databricks.com
-  root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+  # per-user folder instead of /Workspace/Shared, so only the people below can see or change it
+  root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}/${bundle.target}
+
+# the job runs as its own service principal: it owns the raw, bronze, silver and gold schemas,
+# so dbt create or replace works without a person's account. it has no secret.
+run_as:
+  service_principal_name: af488672-a95f-4110-88ef-89262821f462
+
+# applied to the job and to the deployed folder (the run_as principal needs to read the notebooks)
+permissions:
+  - level: CAN_MANAGE
+    user_name: jayjorneypua@gmail.com
+  - level: CAN_VIEW
+    service_principal_name: af488672-a95f-4110-88ef-89262821f462
+  - level: CAN_VIEW
+    service_principal_name: 98de3bcb-a508-4f97-adab-91580e4aaed7
 
 include:
   - resources/*.yml
