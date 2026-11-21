@@ -1,0 +1,14 @@
+--=====================================================================================================
+--                                        Pre Deployment Migrations
+--=====================================================================================================
+-- Purpose:  Runs on every publish, BEFORE the dacpac changes the schema. Only for changes that would
+--           lose data without help (rename, split, type change): copy the data out here, let the dacpac
+--           change the schema, then move it back with a Post migration.
+--           There is no history table yet on a new database at this point, so every Pre script decides
+--           on its own whether to run by checking the schema (for example COL_LENGTH(...) IS NOT NULL).
+--           Add one :r line per script, in number order. See Scripts\Migrations\README.md.
+-- History:
+-- 2026-11-21  Jay Jorney Pua          Created the script.
+--=====================================================================================================
+
+-- :r .\Migrations\Pre\0001_example.sql
