@@ -8,6 +8,7 @@
 -- 2026-11-08  Jay Jorney Pua          App resources, permissions and what each role can do.
 -- 2026-11-16  Jay Jorney Pua          Export statuses.
 -- 2026-11-17  Jay Jorney Pua          Certificate signing for spUser_Grid and spTaxonMonthlyCount_Refresh.
+-- 2026-11-21  Jay Jorney Pua          One-time data migrations section.
 --=====================================================================================================
 
 ------------------------------------------------------------------------------------
@@ -364,3 +365,11 @@ SET @SigningSql =
 EXEC sys.sp_executesql @SigningSql;
 
 ALTER CERTIFICATE ProcSigning REMOVE PRIVATE KEY;
+
+------------------------------------------------------------------------------------
+-- One-time data migrations
+-- Each script runs once per database: it checks dbo.MigrationHistory, does its work in a
+-- transaction and records itself. Add one :r line per script, in number order.
+-- See Scripts\Migrations\README.md.
+------------------------------------------------------------------------------------
+-- :r .\Migrations\Post\0001_example.sql

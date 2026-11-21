@@ -8,7 +8,10 @@
     <ProjectGuid>187101A1-C0CB-43DA-82D7-72E05E31A6E6</ProjectGuid>
   </PropertyGroup>
   <ItemGroup>
+    <PreDeploy Include="Scripts\PreDeployment.sql" />
     <PostDeploy Include="Scripts\PostDeployment.sql" />
+    <Build Remove="Scripts\Migrations\**\*.sql" />
+    <None Include="Scripts\Migrations\**\*.sql" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.SqlServer.Dacpacs.Master" Version="170.0.4" />
