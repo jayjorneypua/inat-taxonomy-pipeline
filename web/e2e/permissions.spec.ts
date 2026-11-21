@@ -10,7 +10,7 @@ test('an administrator sees the Users link', async ({ page }: { page: Page }): P
 test('a viewer does not see the Users link and cannot open the page directly', async ({ page }: { page: Page }): Promise<void> => {
   await logIn(page, viewerUsername(), viewerPassword());
 
-  await expect(page.locator('.children a').first()).toBeVisible();
+  await expect(page.locator('.ranks a').first()).toBeVisible();
   await expect(page.getByRole('link', { name: 'Users' })).toHaveCount(0);
 
   await page.goto('/admin/users');
@@ -20,6 +20,6 @@ test('a viewer does not see the Users link and cannot open the page directly', a
 test('a viewer only sees their own part of the tree', async ({ page }: { page: Page }): Promise<void> => {
   await logIn(page, viewerUsername(), viewerPassword());
 
-  await expect(page.locator('.children a')).toHaveCount(1);
-  await expect(page.locator('.children a').first()).toContainText('Animals');
+  await expect(page.locator('.ranks a')).toHaveCount(1);
+  await expect(page.locator('.ranks a').first()).toContainText('Animals');
 });

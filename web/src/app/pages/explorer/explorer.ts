@@ -83,6 +83,26 @@ export class Explorer {
     });
   }
 
+  // width of the bar next to each lower rank, relative to the biggest one
+  childBarPercent(observationCount: number): number {
+    let maximum: number = 0;
+    for (const child of this.children()) {
+      if (child.observationCount > maximum) {
+        maximum = child.observationCount;
+      }
+    }
+    if (maximum === 0) {
+      return 0;
+    }
+    return (observationCount / maximum) * 100;
+  }
+
+  // naming convention: only genus and lower ranks are printed in italic
+  isItalicRank(rank: string): boolean {
+    const italicRanks: string[] = ['genus', 'subgenus', 'section', 'subsection', 'complex', 'species', 'hybrid', 'subspecies', 'variety', 'form', 'infrahybrid'];
+    return italicRanks.includes(rank.toLowerCase());
+  }
+
   loadMore(): void {
     const cursor: ObservationCursor | null = this.nextCursor();
     if (cursor === null) {

@@ -14,8 +14,8 @@ test('a wrong password shows an error and stays on the login page', async ({ pag
 test('the right password opens the explorer at the root of the tree', async ({ page }: { page: Page }): Promise<void> => {
   await logIn(page);
 
-  await expect(page.locator('.breadcrumb')).toContainText('biota');
-  await expect(page.locator('.children a').first()).toBeVisible();
+  await expect(page.locator('.ladder')).toContainText('biota');
+  await expect(page.locator('.ranks a').first()).toBeVisible();
 });
 
 test('logging out sends you to login, and the explorer stays closed', async ({ page }: { page: Page }): Promise<void> => {
