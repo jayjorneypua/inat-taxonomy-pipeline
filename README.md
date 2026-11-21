@@ -4,24 +4,14 @@ End-to-end pipeline on iNaturalist data: a Databricks lakehouse builds the data 
 
 ## Screenshots
 
-![Explorer, dark mode](docs/images/explorer-dark.png)
+![Explorer](docs/images/explorer.png)
 
-| Photos | Light mode |
-|---|---|
-| ![Latest observations](docs/images/photos.png) | ![Explorer, light mode](docs/images/explorer-light.png) |
-
-## Screenshots
-
-![Explorer, dark mode](docs/images/explorer-dark.png)
-
-| Photos | Light mode |
-|---|---|
-| ![Latest observations](docs/images/photos.png) | ![Explorer, light mode](docs/images/explorer-light.png) |
+![Latest observations](docs/images/photos.png)
 
 ## Architecture
 
 ```mermaid
-flowchart LR
+flowchart TB
     subgraph Databricks["Databricks (job runs as inat-pipeline-job-sp, daily 02:00 Asia/Manila)"]
         SRC["iNaturalist dumps + API"] --> RAW["raw volume<br/>inat.raw.files"]
         RAW --> BRONZE["bronze<br/>Auto Loader"]
