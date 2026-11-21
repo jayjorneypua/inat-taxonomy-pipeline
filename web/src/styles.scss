@@ -1,30 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600&family=Spectral:ital,wght@0,400;0,600;1,400;1,600&display=swap');
+
+// herbarium sheet: pale sage card, archival ink, moss for data, ochre for the one highlight
 :root {
-  --background: #f4f6f4;
-  --surface: #ffffff;
-  --text: #1c2420;
-  --muted-text: #5f6b65;
-  --border: #dde3df;
-  --accent: #2f7d4f;
-  --error: #c0392b;
+  --paper: #eceee6;
+  --sheet: #f7f8f3;
+  --ink: #1f2b33;
+  --graphite: #5b6670;
+  --moss: #4f6b3b;
+  --ochre: #a9791f;
+  --rule: #cdd2c4;
+  --danger: #a8322a;
+
+  --font-name: 'Spectral', 'Iowan Old Style', Georgia, serif;
+  --font-ui: 'Instrument Sans', 'Segoe UI', system-ui, sans-serif;
+
+  // older names, still used by the login and users pages
+  --background: var(--paper);
+  --surface: var(--sheet);
+  --text: var(--ink);
+  --muted-text: var(--graphite);
+  --border: var(--rule);
+  --accent: var(--moss);
+  --error: var(--danger);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #121614;
-    --surface: #1b211e;
-    --text: #e6ebe8;
-    --muted-text: #9aa59f;
-    --border: #2c3430;
-    --accent: #4caf73;
-    --error: #ef6b5b;
+    --paper: #1a2228;
+    --sheet: #222c33;
+    --ink: #e4e8e1;
+    --graphite: #9aa5ad;
+    --moss: #8fb06f;
+    --ochre: #d9a441;
+    --rule: #33404a;
+    --danger: #ef7a6d;
     color-scheme: dark;
   }
 }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--background);
-  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--ochre);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }

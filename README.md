@@ -2,6 +2,22 @@
 
 End-to-end pipeline on iNaturalist data: a Databricks lakehouse builds the data every night, a Python sync copies it into SQL Server, and a C# API serves it to an Angular dashboard where you browse the tree of life with charts and a photo grid.
 
+## Screenshots
+
+![Explorer, dark mode](docs/images/explorer-dark.png)
+
+| Photos | Light mode |
+|---|---|
+| ![Latest observations](docs/images/photos.png) | ![Explorer, light mode](docs/images/explorer-light.png) |
+
+## Screenshots
+
+![Explorer, dark mode](docs/images/explorer-dark.png)
+
+| Photos | Light mode |
+|---|---|
+| ![Latest observations](docs/images/photos.png) | ![Explorer, light mode](docs/images/explorer-light.png) |
+
 ## Architecture
 
 ```mermaid

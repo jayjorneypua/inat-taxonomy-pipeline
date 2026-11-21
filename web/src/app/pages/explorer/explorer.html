@@ -1,143 +1,172 @@
 <header class="top-bar">
-  <a class="brand" routerLink="/explore">iNat Taxonomy</a>
-  <nav class="top-links">
-    <a routerLink="/admin/users" *appIfPermission="'admin.users.manage'">Users</a>
-    <button type="button" (click)="logout()">Log out</button>
-  </nav>
+  <div class="top-bar-inner">
+    <a class="brand" routerLink="/explore">
+      <span class="brand-name">iNat Taxonomy</span>
+      <span class="brand-scope">Research-grade observations in California since 2025</span>
+    </a>
+    <nav class="top-links">
+      <a routerLink="/admin/users" *appIfPermission="'admin.users.manage'">Users</a>
+      <button type="button" (click)="logout()">Log out</button>
+    </nav>
+  </div>
 </header>
 
-<main class="content">
-  <nav class="breadcrumb">
-    @for (pathItem of path(); track pathItem.id; let isLast = $last) {
-      @if (isLast) {
-        <span class="current">{{ pathItem.commonName ?? pathItem.scientificName }}</span>
-      } @else {
-        <a [routerLink]="['/explore', pathItem.id]">{{ pathItem.commonName ?? pathItem.scientificName }}</a>
-        <span class="separator">›</span>
+<div class="page">
+  <!-- the path from the root down to this taxon, drawn as a tree -->
+  <nav class="ladder" aria-label="Classification">
+    <ol>
+      @for (pathItem of path(); track pathItem.id; let isLast = $last; let depth = $index) {
+        <li [style.--depth]="depth">
+          @if (isLast) {
+            <span class="ladder-current" aria-current="page">{{ pathItem.commonName ?? pathItem.scientificName }}</span>
+          } @else {
+            <a [routerLink]="['/explore', pathItem.id]">{{ pathItem.commonName ?? pathItem.scientificName }}</a>
+          }
+        </li>
       }
-    }
+    </ol>
   </nav>
 
-  @if (errorMessage(); as message) {
-    <p class="error">{{ message }}</p>
-  }
+  <main class="content">
+    @if (errorMessage(); as message) {
+      <p class="error">{{ message }}</p>
+    }
 
-  @if (currentTaxon(); as taxon) {
-    <section class="taxon-header">
-      <h1>{{ taxon.commonName ?? taxon.scientificName }}</h1>
-      <p class="subtitle"><em>{{ taxon.scientificName }}</em> · {{ taxon.rank }}</p>
+    @if (currentTaxon(); as taxon) {
+      <section class="taxon-header">
+        @if (taxon.commonName && taxon.commonName !== taxon.scientificName) {
+          <h1 class="common-name">{{ taxon.commonName }}</h1>
+          <p class="scientific-line">
+            <span class="scientific-name" [class.binomial]="isItalicRank(taxon.rank)">{{ taxon.scientificName }}</span>
+            <span class="rank">{{ taxon.rank }}</span>
+          </p>
+        } @else {
+          <h1 class="common-name" [class.binomial]="isItalicRank(taxon.rank)">{{ taxon.scientificName }}</h1>
+          <p class="scientific-line">
+            <span class="rank">{{ taxon.rank }}</span>
+          </p>
+        }
 
-      <!-- only users with observations.export see this; the procedures check the permission again -->
-      <div class="export-actions" *appIfPermission="'observations.export'">
-        <button type="button" (click)="exportObservations()" [disabled]="isExporting()">
-          @if (isExporting()) {
-            Exporting...
-          } @else {
-            Export CSV
+        <!-- only users with observations.export see this; the procedures check the permission again -->
+        <div class="export-actions" *appIfPermission="'observations.export'">
+          <button type="button" class="outline-button" (click)="exportObservations()" [disabled]="isExporting()">
+            @if (isExporting()) {
+              Exporting...
+            } @else {
+              Export CSV
+            }
+          </button>
+          @if (exportMessage(); as message) {
+            <span class="muted">{{ message }}</span>
           }
-        </button>
-        @if (exportMessage(); as message) {
-          <span class="muted">{{ message }}</span>
-        }
-        @if (exportError(); as message) {
-          <span class="error">{{ message }}</span>
-        }
-      </div>
-    </section>
-  }
+          @if (exportError(); as message) {
+            <span class="error">{{ message }}</span>
+          }
+        </div>
+      </section>
+    }
 
-  <div class="layout">
-    <section class="panel">
-      <h2>Observations per month</h2>
+    <section class="section">
+      <h2 class="section-title">Observations by month</h2>
       @if (monthCounts().length === 0) {
         <p class="muted">No observations to chart.</p>
       } @else {
         <div class="chart">
           @for (month of monthCounts(); track month.monthStart) {
-            <div class="bar-column" [title]="(month.monthStart | date: 'MMM yyyy') + ': ' + (month.observationCount | number)">
+            <div
+              class="bar-column"
+              [class.peak]="barHeightPercent(month.observationCount) === 100"
+              [title]="(month.monthStart | date: 'MMM yyyy') + ': ' + (month.observationCount | number)">
               <div class="bar" [style.height.%]="barHeightPercent(month.observationCount)"></div>
-              <span class="bar-label">
-                @if (isJanuary(month.monthStart)) {
-                  {{ month.monthStart.substring(0, 4) }}
-                }
-              </span>
+              <span class="month-initial">{{ month.monthStart | date: 'MMMMM' }}</span>
+              @if (isJanuary(month.monthStart)) {
+                <span class="year-label">{{ month.monthStart.substring(0, 4) }}</span>
+              }
             </div>
           }
         </div>
       }
     </section>
 
-    <section class="panel">
-      <h2>Lower ranks</h2>
+    <section class="section">
+      <h2 class="section-title">Lower ranks</h2>
       @if (isLoadingChildren()) {
         <p class="muted">Loading...</p>
       } @else if (children().length === 0) {
         <p class="muted">No lower ranks observed.</p>
       } @else {
-        <ul class="children">
+        <ul class="ranks">
           @for (child of children(); track child.id) {
             <li>
-              <a [routerLink]="['/explore', child.id]">
-                <span class="child-name">
-                  {{ child.commonName ?? child.scientificName }}
-                  <small><em>{{ child.scientificName }}</em> · {{ child.rank }}</small>
+              <a class="rank-row" [routerLink]="['/explore', child.id]">
+                <span class="rank-name">
+                  @if (child.commonName && child.commonName !== child.scientificName) {
+                    <span class="rank-common">{{ child.commonName }}</span>
+                    <span class="rank-scientific" [class.binomial]="isItalicRank(child.rank)">{{ child.scientificName }}</span>
+                  } @else {
+                    <span class="rank-common" [class.binomial]="isItalicRank(child.rank)">{{ child.scientificName }}</span>
+                  }
+                  <span class="rank-level">{{ child.rank }}</span>
                 </span>
-                <span class="child-count">{{ child.observationCount | number }}</span>
+                <span class="rank-count">{{ child.observationCount | number }}</span>
+                <span class="rank-bar" aria-hidden="true">
+                  <span [style.width.%]="childBarPercent(child.observationCount)"></span>
+                </span>
               </a>
             </li>
           }
         </ul>
       }
     </section>
-  </div>
 
-  <section class="photos">
-    <h2>Latest observations</h2>
-    @if (isLoadingObservations()) {
-      <p class="muted">Loading photos...</p>
-    } @else if (observations().length === 0) {
-      <p class="muted">No observations with photos.</p>
-    } @else {
-      <div class="photo-grid">
-        @for (card of observations(); track card.observationId) {
-          <figure class="photo-card">
-            @if (card.mediumUrl) {
-              <!-- the grid shows small.jpg (240 px, about 5x lighter); clicking opens medium.jpg in a new tab -->
-              <a [href]="card.mediumUrl" target="_blank" rel="noopener">
-                <img
-                  [src]="card.mediumUrl.replace('/medium.', '/small.')"
-                  [alt]="card.commonName ?? card.scientificName"
-                  width="240"
-                  height="240"
-                  loading="lazy"
-                  decoding="async" />
-              </a>
-            } @else {
-              <div class="no-photo">No photo</div>
-            }
-            <figcaption>
-              <strong>{{ card.commonName ?? card.scientificName }}</strong>
-              <em>{{ card.scientificName }}</em>
-              <span>{{ card.observerDisplayName }} · {{ card.observedDate | date: 'mediumDate' }}</span>
-              @if (card.attribution) {
-                <small class="credit">{{ card.attribution }}</small>
+    <section class="section">
+      <h2 class="section-title">Latest observations</h2>
+      @if (isLoadingObservations()) {
+        <p class="muted">Loading photos...</p>
+      } @else if (observations().length === 0) {
+        <p class="muted">No observations with photos.</p>
+      } @else {
+        <div class="plates">
+          @for (card of observations(); track card.observationId; let i = $index) {
+            <figure class="plate" [class.feature]="i % 7 === 0">
+              @if (card.mediumUrl) {
+                <a [href]="card.mediumUrl" target="_blank" rel="noopener">
+                  @if (i % 7 === 0) {
+                    <img [src]="card.mediumUrl" [alt]="card.commonName ?? card.scientificName" loading="lazy" decoding="async" />
+                  } @else {
+                    <!-- small tiles show small.jpg (240 px, about 5x lighter); clicking opens medium.jpg -->
+                    <img [src]="card.mediumUrl.replace('/medium.', '/small.')" [alt]="card.commonName ?? card.scientificName" loading="lazy" decoding="async" />
+                  }
+                </a>
+              } @else {
+                <div class="no-photo">No photo</div>
               }
-            </figcaption>
-          </figure>
-        }
-      </div>
-
-      @if (nextCursor()) {
-        <div class="load-more">
-          <button type="button" (click)="loadMore()" [disabled]="isLoadingMore()">
-            @if (isLoadingMore()) {
-              Loading...
-            } @else {
-              Load more
-            }
-          </button>
+              <figcaption>
+                <span class="plate-name">{{ card.commonName ?? card.scientificName }}</span>
+                <span class="plate-details">
+                  <em>{{ card.scientificName }}</em>
+                  <span>{{ card.observerDisplayName }}, {{ card.observedDate | date: 'mediumDate' }}</span>
+                  @if (card.attribution) {
+                    <small>{{ card.attribution }}</small>
+                  }
+                </span>
+              </figcaption>
+            </figure>
+          }
         </div>
+
+        @if (nextCursor()) {
+          <div class="load-more">
+            <button type="button" class="outline-button" (click)="loadMore()" [disabled]="isLoadingMore()">
+              @if (isLoadingMore()) {
+                Loading...
+              } @else {
+                Load more
+              }
+            </button>
+          </div>
+        }
       }
-    }
-  </section>
-</main>
+    </section>
+  </main>
+</div>
